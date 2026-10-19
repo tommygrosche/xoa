@@ -103,13 +103,15 @@
         prefixes: topic.prefixes || Core.DEFAULT_PREFIXES,
         currentInternetMessageId: topic.curImid,
         currentRestId: topic.curRest,
+        currentMessage: topic.cur || null,
         maxResults: topic.maxResults || 25,
         useSubject: topic.useSubject
       });
       view = {
         kind: 'results', ms: json._ms, conversationOnly: !topic.useSubject,
         count: result.total > result.items.length ? result.items.length + ' von ' + result.total : String(result.items.length),
-        items: result.items.map(function (e) { return e.message; })
+        total: result.total,
+        items: result.items.map(function (e) { var m = Object.assign({}, e.message); m.__current = !!e.current; return m; })
       };
       render();
     }).catch(function (e) {
@@ -135,7 +137,8 @@
       subject: m.subject || '',
       received: m.receivedDateTime || m.sentDateTime || '',
       hasAttachments: !!m.hasAttachments,
-      flag: Core.flagState(m)
+      flag: Core.flagState(m),
+      current: !!m.__current
     };
   }
 
@@ -203,7 +206,7 @@
     $('count').textContent = items.length === total ? (view.count || String(total)) : items.length + ' von ' + total;
     $('meta').textContent = 'xob · ' + view.ms + ' ms' + (view.conversationOnly ? ' · nur Conversation (Betreff zu kurz)' : '');
 
-    if (!total) { setState('Keine verwandten Mails gefunden.'); return; }
+    if (!total) { setState('Keine Mails gefunden.'); return; }
     if (!items.length) { setState('Kein Treffer für diesen Filter.'); return; }
     setState('');
 
@@ -211,7 +214,16 @@
       var tr = document.createElement('tr');
       tr.tabIndex = 0;
       tr.setAttribute('aria-selected', 'false');
-      tr.appendChild(td('from', it.from || '(unbekannt)', it.fromAddress || it.from));
+      var fromCell = td('from', '', it.fromAddress || it.from);
+      if (it.current) {
+        tr.classList.add('current');
+        var badge = document.createElement('span');
+        badge.className = 'cur-badge';
+        badge.textContent = 'Ausgewählt';
+        fromCell.appendChild(badge);
+      }
+      fromCell.appendChild(document.createTextNode(it.from || '(unbekannt)'));
+      tr.appendChild(fromCell);
       tr.appendChild(td('to', it.to, it.to));
       tr.appendChild(td('subject', it.subject || '(ohne Betreff)', it.subject));
       tr.appendChild(td('received', Core.formatTimestamp(it.received)));

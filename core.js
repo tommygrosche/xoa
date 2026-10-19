@@ -80,8 +80,9 @@
   }
 
   /*
-   * Führt Conversation- und Betreff-Treffer zusammen.
-   * opts: { normalized, prefixes, currentInternetMessageId, currentRestId, maxResults, useSubject }
+   * Führt Conversation- und Betreff-Treffer zusammen. Die ausgewählte Mail ist immer enthalten
+   * (entry.current = true); fehlt sie in den Treffern, wird opts.currentMessage eingesetzt.
+   * opts: { normalized, prefixes, currentInternetMessageId, currentRestId, currentMessage, maxResults, useSubject }
    * Rückgabe: { items, total }
    */
   function mergeResults(conversation, subject, opts) {
@@ -89,11 +90,15 @@
     var target = compareKey(opts.normalized);
     var byKey = {};
     var list = [];
+    var current = null;
+
+    function isCurrent(m) {
+      return (opts.currentInternetMessageId && m.internetMessageId === opts.currentInternetMessageId) ||
+        (opts.currentRestId && m.id === opts.currentRestId);
+    }
 
     function add(m, source) {
       if (!m || m.isDraft) return;
-      if (opts.currentInternetMessageId && m.internetMessageId === opts.currentInternetMessageId) return;
-      if (opts.currentRestId && m.id === opts.currentRestId) return;
       var key = m.internetMessageId || m.id;
       if (!key) return;
       var existing = byKey[key];
@@ -101,7 +106,11 @@
         if (existing.sources.indexOf(source) < 0) existing.sources.push(source);
         return;
       }
-      var entry = { message: m, sources: [source] };
+      var entry = { message: m, sources: [source], current: !!isCurrent(m) };
+      if (entry.current) {
+        if (current) return; // gleiche Mail in zweitem Ordner
+        current = entry;
+      }
       byKey[key] = entry;
       list.push(entry);
     }
@@ -112,10 +121,19 @@
         if (compareKey(normalizeSubject(m && m.subject, null, res)) === target) add(m, 'subject');
       });
     }
+    if (!current && opts.currentMessage) {
+      current = { message: opts.currentMessage, sources: ['current'], current: true };
+      list.push(current);
+    }
 
     list.sort(function (a, b) { return messageDate(b.message) - messageDate(a.message); });
     var max = Math.max(1, parseInt(opts.maxResults, 10) || 25);
-    return { items: list.slice(0, max), total: list.length };
+    var items = list.slice(0, max);
+    if (current && items.indexOf(current) < 0) {
+      items[items.length - 1] = current;
+      items.sort(function (a, b) { return messageDate(b.message) - messageDate(a.message); });
+    }
+    return { items: items, total: list.length };
   }
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }

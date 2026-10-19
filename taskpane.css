@@ -47,17 +47,9 @@ body {
 [hidden] { display: none !important; }
 h2 { font-size: 14px; font-weight: 600; margin: 0; }
 
-.app-header {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; background: var(--bg); z-index: 2;
-}
 .app-logo { display: inline-flex; flex: 0 0 auto; }
-.app-logo img { height: 20px; width: 58px; display: block; }
-.app-header .icon-btn { flex: 0 0 auto; }
-.app-title { min-width: 0; }
-.app-title { font-weight: 600; font-size: 13px; color: var(--fg-2); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-logo img { height: 16px; width: 46px; display: block; }
+.app-footer .icon-btn { flex: 0 0 auto; }
 .icon-btn {
   width: 32px; height: 32px; border: 0; background: transparent; color: var(--fg-2);
   border-radius: var(--radius); display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
@@ -137,9 +129,9 @@ input[type=text], input[type=url], input[type=password], input[type=number], sel
 .btn-secondary:hover { background: var(--bg-soft); }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--brand); }
 
-.app-footer { padding: 8px 12px; font-size: 11px; color: var(--fg-3); }
+
 .toast {
-  position: fixed; left: 12px; right: 12px; bottom: 12px; padding: 8px 12px; border-radius: var(--radius);
+  position: fixed; left: 12px; right: 12px; bottom: 56px; padding: 8px 12px; border-radius: var(--radius);
   background: var(--fg); color: var(--bg); font-size: 13px; z-index: 5;
 }
 
@@ -151,3 +143,16 @@ input[type=text], input[type=url], input[type=password], input[type=number], sel
 
 .window-box { padding: 4px 12px 12px; }
 .window-box .btn { width: 100%; }
+
+body.pane { min-height: 100vh; display: flex; flex-direction: column; }
+body.pane > main, body.pane > .settings { flex: 1 0 auto; }
+.app-footer {
+  position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 8px;
+  padding: 6px 6px 6px 12px; border-top: 1px solid var(--line); background: var(--bg);
+}
+.app-title { font-size: 12px; font-weight: 600; color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.app-version { font-size: 11px; color: var(--fg-3); white-space: nowrap; flex: 1 0 auto; }
+.meta { padding: 6px 12px; font-size: 11px; color: var(--fg-3); }
+.meta:empty { display: none; }
+.item.current { box-shadow: inset 3px 0 0 var(--brand); }
+.cur-badge { font-size: 10px; font-weight: 600; color: var(--brand); border: 1px solid var(--brand); border-radius: 8px; padding: 0 5px; flex: 0 0 auto; }

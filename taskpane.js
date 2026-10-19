@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.0.0';
+  var VERSION = '1.3.0';
   var SETTINGS_KEY = 'xoaConfig';
   var Core = window.XoaCore;
 
@@ -125,6 +125,23 @@
     return item ? item.itemId : null;
   }
 
+  // Ausgewählte Mail als Graph-ähnliches Objekt (Ersatz, falls xob sie nicht mitliefert)
+  function currentAsMessage(item, restId) {
+    function addr(a) { return a ? { emailAddress: { name: a.displayName || a.emailAddress || '', address: a.emailAddress || '' } } : null; }
+    var created = item.dateTimeCreated instanceof Date ? item.dateTimeCreated.toISOString() : (item.dateTimeCreated || '');
+    return {
+      id: restId || item.itemId || 'current',
+      internetMessageId: item.internetMessageId || '',
+      subject: item.subject || '',
+      from: addr(item.from),
+      toRecipients: (item.to || []).map(addr).filter(Boolean),
+      receivedDateTime: created,
+      hasAttachments: !!(item.attachments && item.attachments.length),
+      flag: { flagStatus: 'notFlagged' },
+      webLink: restId ? 'https://outlook.office.com/mail/deeplink/read/' + encodeURIComponent(restId) : ''
+    };
+  }
+
   // ---------- Darstellung ----------
   var FLAG_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 14.5V2.5m0 0h8l-1.8 3 1.8 3h-8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var FLAG_DONE_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -160,7 +177,7 @@
     result.items.forEach(function (entry) {
       var m = entry.message;
       var row = document.createElement('div');
-      row.className = 'item';
+      row.className = 'item' + (entry.current ? ' current' : '');
       row.setAttribute('role', 'listitem');
       row.tabIndex = 0;
 
@@ -169,6 +186,7 @@
       var from = Core.personName(m.from) || '(unbekannt)';
       var to = Core.recipientsLabel(m.toRecipients);
       l1.appendChild(span('from', from));
+      if (entry.current) l1.appendChild(span('cur-badge', 'Ausgewählt'));
       if (to) l1.appendChild(span('to', to));
       else l1.appendChild(span('to', ''));
       l1.appendChild(span('time', Core.formatTimestamp(m.receivedDateTime || m.sentDateTime)));
@@ -314,7 +332,8 @@
       maxResults: config.maxResults,
       prefixes: config.prefixes,
       curImid: item.internetMessageId || '',
-      curRest: currentRestId(item) || ''
+      curRest: currentRestId(item) || '',
+      cur: currentAsMessage(item, currentRestId(item))
     };
     setState('Suche läuft…');
     if (canUseWindow()) $('list').innerHTML = ''; else showSkeleton();
@@ -344,10 +363,11 @@
         prefixes: config.prefixes,
         currentInternetMessageId: item.internetMessageId,
         currentRestId: currentRestId(item),
+        currentMessage: lastTopic.cur,
         maxResults: config.maxResults,
         useSubject: useSubject
       });
-      $('footer').textContent = 'xob · ' + json._ms + ' ms' + (useSubject ? '' : ' · nur Conversation (Betreff zu kurz)');
+      $('meta').textContent = 'xob · ' + json._ms + ' ms' + (useSubject ? '' : ' · nur Conversation (Betreff zu kurz)');
       var countLabel = result.total > result.items.length
         ? result.items.length + ' von ' + result.total
         : String(result.items.length);
@@ -359,7 +379,7 @@
       $('resultCount').textContent = countLabel;
       if (canUseWindow()) {
         $('list').innerHTML = '';
-        setState(result.items.length === 1 ? '1 verwandte Mail gefunden.' : result.items.length + ' verwandte Mails gefunden.');
+        setState(result.total === 1 ? '1 Mail gefunden (nur die ausgewählte).' : result.total + ' Mails gefunden, inklusive der ausgewählten.');
         $('windowBox').hidden = false;
       } else {
         setState('');
@@ -526,6 +546,7 @@
     $('btnAddSelection').addEventListener('click', addPrefixFromSelection);
     document.addEventListener('selectionchange', trackSelection);
     $('versionInfo').textContent = 'xoa ' + VERSION;
+    $('appVersion').textContent = 'v' + VERSION;
   }
 
   Office.onReady(function (info) {

@@ -99,3 +99,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); out
   col.c-from { width: 24%; }
   col.c-to { width: 18%; }
 }
+
+tbody tr.current td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+.cur-badge {
+  display: inline-block; margin-right: 6px; padding: 0 5px; border: 1px solid var(--brand); border-radius: 8px;
+  font-size: 10px; font-weight: 600; color: var(--brand); vertical-align: 1px;
+}
