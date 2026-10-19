@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>xob Konsole</title>
+  <style>
+    :root { --bg:#fff; --fg:#242424; --line:#d1d1d1; --soft:#f5f5f5; --brand:#0f6cbd; --err:#c50f1f; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#1f1f1f; --fg:#fff; --line:#3d3d3d; --soft:#292929; --brand:#479ef5; --err:#f1707b; } }
+    body { font-family: "Segoe UI", -apple-system, sans-serif; background: var(--bg); color: var(--fg); max-width: 760px; margin: 20px auto; padding: 0 16px; font-size: 14px; }
+    label { display: block; margin: 10px 0 4px; font-size: 12px; opacity: .8; }
+    input, select { width: 100%; box-sizing: border-box; height: 32px; padding: 0 8px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+    button { margin-top: 12px; height: 32px; padding: 0 14px; font: inherit; font-weight: 600; border-radius: 6px; border: 1px solid var(--brand); background: var(--brand); color: #fff; cursor: pointer; }
+    pre { background: var(--soft); padding: 10px; border-radius: 6px; overflow: auto; max-height: 60vh; font-size: 12px; }
+    .err { color: var(--err); }
+  </style>
+</head>
+<body>
+  <h1 style="font-size:18px">xob Konsole</h1>
+  <p>Ruft den xob-mail-Flow direkt aus dem Browser auf, so wie es das Add-in tut. Eingaben werden nicht gespeichert.</p>
+
+  <label for="url">Flow-URL</label>
+  <input id="url" type="url" spellcheck="false" autocomplete="off">
+  <label for="key">xob-Schlüssel</label>
+  <input id="key" type="password" spellcheck="false" autocomplete="off">
+  <label for="service">Service</label>
+  <select id="service">
+    <option value="system.ping">system.ping</option>
+    <option value="mail.related">mail.related</option>
+  </select>
+  <label for="conv">conversationId (für mail.related)</label>
+  <input id="conv" type="text" spellcheck="false">
+  <label for="subj">Betreff ohne Präfixe (für mail.related)</label>
+  <input id="subj" type="text" spellcheck="false">
+  <label for="mode">Suchmodus</label>
+  <select id="mode">
+    <option value="subject">Nur Betreff</option>
+    <option value="all">Betreff, Text, Absender</option>
+  </select>
+  <div id="err" class="err"></div>
+  <button type="button" id="go">Senden</button>
+  <pre id="out">–</pre>
+
+  <script src="js/core.js"></script>
+  <script>
+    (function () {
+      var $ = function (id) { return document.getElementById(id); };
+      $('go').addEventListener('click', function () {
+        var url = $('url').value.trim();
+        if (!/^https:\/\//i.test(url)) { $('err').textContent = 'Gib die Flow-URL ein (https://…).'; return; }
+        $('err').textContent = '';
+        var service = $('service').value;
+        var payload = {};
+        if (service === 'mail.related') {
+          var s = $('subj').value.trim();
+          payload = { conversationId: $('conv').value.trim(), search: s ? XoaCore.buildSearch(s, $('mode').value) : '', top: 50 };
+          if (!payload.conversationId && !payload.search) { $('err').textContent = 'Gib eine conversationId oder einen Betreff ein.'; return; }
+        }
+        var body = { service: service, version: 1, requestId: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())), client: 'console', key: $('key').value, payload: payload };
+        var t = performance.now();
+        $('out').textContent = 'Sende…';
+        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          .then(function (r) { return r.text().then(function (txt) { return { r: r, txt: txt }; }); })
+          .then(function (x) {
+            var ms = Math.round(performance.now() - t);
+            var pretty = x.txt;
+            try { pretty = JSON.stringify(JSON.parse(x.txt), null, 2); } catch (e) {}
+            $('out').textContent = 'HTTP ' + x.r.status + ' · ' + ms + ' ms\n\n' + pretty;
+          })
+          .catch(function (e) { $('out').textContent = 'Fehler: ' + e; });
+      });
+    })();
+  </script>
+</body>
+</html>
