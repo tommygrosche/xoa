@@ -21,6 +21,7 @@
 
   var config = clone(DEFAULTS);
   var runToken = 0;
+  var lastTopic = null;  // Suchparameter der aktuellen Mail für ein Themen-Fenster
   var lastSelection = '';
   var draftPrefixes = null;
 
@@ -207,6 +208,30 @@
     toast._t = setTimeout(function () { t.hidden = true; }, 3000);
   }
 
+  // ---------- Themen-Fenster (eigenständige Browserseite, je Thema eines) ----------
+  function canUseWindow() {
+    return !isMobile();
+  }
+
+  function b64(obj) {
+    return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+  }
+
+  function viewerUrl(topic) {
+    var base = location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, 'viewer.html');
+    var cfg = { u: config.xobMailUrl, k: config.xobKey };
+    return base + '#t=' + encodeURIComponent(b64(topic)) + '&c=' + encodeURIComponent(b64(cfg));
+  }
+
+  function openWindow() {
+    if (!lastTopic) { toast('Wähle zuerst eine Mail aus.'); return; }
+    var url = viewerUrl(lastTopic);
+    try {
+      if (Office.context.ui && Office.context.ui.openBrowserWindow) { Office.context.ui.openBrowserWindow(url); return; }
+    } catch (e) { /* weiter mit window.open */ }
+    window.open(url, '_blank');
+  }
+
   // ---------- Mail öffnen ----------
   function isMobile() {
     try {
@@ -252,6 +277,8 @@
     $('list').innerHTML = '';
     $('resultCount').textContent = '';
 
+    $('windowBox').hidden = true;
+    lastTopic = null;
     if (!item) {
       $('normSubject').textContent = '–';
       $('rawSubject').textContent = '–';
@@ -276,8 +303,21 @@
       return;
     }
 
+    lastTopic = {
+      v: 1,
+      conversationId: conversationId,
+      normalized: normalized,
+      raw: raw,
+      useSubject: useSubject,
+      mode: config.searchMode === 'all' ? 'all' : 'subject',
+      top: Math.min(100, Math.max(parseInt(config.fetchTop, 10) || 50, (parseInt(config.maxResults, 10) || 25) * 2)),
+      maxResults: config.maxResults,
+      prefixes: config.prefixes,
+      curImid: item.internetMessageId || '',
+      curRest: currentRestId(item) || ''
+    };
     setState('Suche läuft…');
-    showSkeleton();
+    if (canUseWindow()) $('list').innerHTML = ''; else showSkeleton();
 
     var top = Math.min(100, Math.max(parseInt(config.fetchTop, 10) || 50, (parseInt(config.maxResults, 10) || 25) * 2));
     var mode = config.searchMode === 'all' ? 'all' : 'subject';
@@ -308,16 +348,23 @@
         useSubject: useSubject
       });
       $('footer').textContent = 'xob · ' + json._ms + ' ms' + (useSubject ? '' : ' · nur Conversation (Betreff zu kurz)');
+      var countLabel = result.total > result.items.length
+        ? result.items.length + ' von ' + result.total
+        : String(result.items.length);
       if (!result.items.length) {
         $('list').innerHTML = '';
         setState('Keine verwandten Mails gefunden.');
         return;
       }
-      setState('');
-      $('resultCount').textContent = result.total > result.items.length
-        ? result.items.length + ' von ' + result.total
-        : String(result.items.length);
-      renderList(result);
+      $('resultCount').textContent = countLabel;
+      if (canUseWindow()) {
+        $('list').innerHTML = '';
+        setState(result.items.length === 1 ? '1 verwandte Mail gefunden.' : result.items.length + ' verwandte Mails gefunden.');
+        $('windowBox').hidden = false;
+      } else {
+        setState('');
+        renderList(result);
+      }
     }).catch(function (e) {
       if (token !== runToken) return;
       $('list').innerHTML = '';
@@ -453,6 +500,7 @@
 
   function bindUi() {
     $('btnRefresh').addEventListener('click', refresh);
+    $('btnOpenWindow').addEventListener('click', openWindow);
     $('btnSettings').addEventListener('click', function () { if ($('viewSettings').hidden) openSettings(); else closeSettings(); });
     $('btnClose').addEventListener('click', closeSettings);
     $('btnSave').addEventListener('click', saveSettings);
