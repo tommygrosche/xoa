@@ -10,8 +10,11 @@
 </head>
 <body>
   <header class="app-header">
-    <img src="icon-32.png" alt="" class="app-logo" width="20" height="20">
-    <span class="app-title">xOrg Outlook Acceleration</span>
+    <picture class="app-logo">
+      <source srcset="logo-dark.png" media="(prefers-color-scheme: dark)">
+      <img src="logo.png" alt="xOrg" height="20">
+    </picture>
+    <span class="app-title">Outlook Acceleration</span>
     <button type="button" id="btnRefresh" class="icon-btn" aria-label="Aktualisieren" title="Aktualisieren">
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6M16.5 3.5v3.5H13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>

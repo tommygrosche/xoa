@@ -53,8 +53,9 @@ h2 { font-size: 14px; font-weight: 600; margin: 0; }
   border-bottom: 1px solid var(--line);
   position: sticky; top: 0; background: var(--bg); z-index: 2;
 }
-.app-logo { border-radius: 4px; }
-.app-title { font-weight: 600; font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-logo { display: inline-flex; flex: 0 0 auto; }
+.app-logo img { height: 20px; width: auto; display: block; }
+.app-title { font-weight: 600; font-size: 13px; color: var(--fg-2); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .icon-btn {
   width: 32px; height: 32px; border: 0; background: transparent; color: var(--fg-2);
   border-radius: var(--radius); display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
