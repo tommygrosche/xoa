@@ -156,3 +156,5 @@ body.pane > main, body.pane > .settings { flex: 1 0 auto; }
 .meta:empty { display: none; }
 .item.current { box-shadow: inset 3px 0 0 var(--brand); }
 .cur-badge { font-size: 10px; font-weight: 600; color: var(--brand); border: 1px solid var(--brand); border-radius: 8px; padding: 0 5px; flex: 0 0 auto; }
+.term-form { display: flex; gap: 6px; padding: 0 12px 8px; }
+.term-form input { flex: 1; min-width: 0; height: 28px; font-size: 12px; }

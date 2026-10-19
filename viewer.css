@@ -105,3 +105,5 @@ tbody tr.current td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
   display: inline-block; margin-right: 6px; padding: 0 5px; border: 1px solid var(--brand); border-radius: 8px;
   font-size: 10px; font-weight: 600; color: var(--brand); vertical-align: 1px;
 }
+.win-terms { font-size: 11px; color: var(--brand); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.win-terms:empty { display: none; }

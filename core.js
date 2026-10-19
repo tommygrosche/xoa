@@ -73,6 +73,77 @@
     return '"subject:\\"' + t + '\\""';
   }
 
+  // "Projekt 1; Kunde 1" -> ["Projekt 1", "Kunde 1"] (ohne Leere/Doppelte, max. 10)
+  function parseTerms(text) {
+    var seen = {};
+    var out = [];
+    String(text || '').split(';').forEach(function (t) {
+      var v = t.replace(/["\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+      if (!v) return;
+      var k = v.toLowerCase();
+      if (seen[k]) return;
+      seen[k] = true;
+      out.push(v);
+    });
+    return out.slice(0, 10);
+  }
+
+  // KQL für Graph $search: jeder Begriff als ganze Phrase im Betreff, verknüpft mit OR
+  function buildTermsSearch(terms) {
+    var list = (terms || []).filter(Boolean);
+    if (!list.length) return '';
+    return '"' + list.map(function (t) { return 'subject:\\"' + t + '\\"'; }).join(' OR ') + '"';
+  }
+
+  // Enthält der Betreff mindestens einen Begriff vollständig (als ganze Phrase, nicht als Wortteil)?
+  // "Projekt 1" passt auf "RE: Projekt 1 Kickoff", aber nicht auf "Projekt 12".
+  function subjectHasTerm(subject, terms) {
+    var s = String(subject || '').replace(/\s+/g, ' ');
+    return (terms || []).some(function (t) {
+      var v = String(t || '').replace(/\s+/g, ' ').trim();
+      if (!v) return false;
+      var re = new RegExp('(^|[^\\p{L}\\p{N}])' + escapeRe(v) + '(?=$|[^\\p{L}\\p{N}])', 'iu');
+      return re.test(s);
+    });
+  }
+
+  /*
+   * Fragt xob mail.related ab. call(service, payload) -> Promise({data, _ms}).
+   * p: { conversationId, normalized, useSubject, mode, terms[], top }
+   * Fällt bei abgelehnter Abfrage auf allgemeine Betreffsuche und einzelne Begriffe zurück.
+   */
+  function relatedQuery(call, p) {
+    var terms = p.terms || [];
+    function payload(mode, withTerms) {
+      return {
+        conversationId: p.conversationId || '',
+        search: p.useSubject ? buildSearch(p.normalized, mode) : '',
+        terms: withTerms ? buildTermsSearch(terms) : '',
+        top: p.top || 50
+      };
+    }
+    var mode = p.mode === 'all' ? 'all' : 'subject';
+    return call('mail.related', payload(mode, true)).catch(function (e) {
+      if (e && (e.code === 'UNAUTHORIZED' || e.code === 'NETWORK' || e.code === 'TIMEOUT')) throw e;
+      var calls = [call('mail.related', payload('all', false))];
+      terms.forEach(function (t) {
+        calls.push(call('mail.related', { conversationId: '', search: '', terms: buildTermsSearch([t]), top: p.top || 50 }));
+      });
+      return Promise.all(calls).then(function (rs) {
+        var d = { conversation: [], subject: [], terms: [] };
+        var ms = 0;
+        rs.forEach(function (r) {
+          var x = (r && r.data) || {};
+          d.conversation = d.conversation.concat(x.conversation || []);
+          d.subject = d.subject.concat(x.subject || []);
+          d.terms = d.terms.concat(x.terms || []);
+          ms = Math.max(ms, (r && r._ms) || 0);
+        });
+        return { data: d, _ms: ms };
+      });
+    });
+  }
+
   function messageDate(m) {
     var d = m && (m.receivedDateTime || m.sentDateTime);
     var t = d ? Date.parse(d) : NaN;
@@ -82,7 +153,7 @@
   /*
    * Führt Conversation- und Betreff-Treffer zusammen. Die ausgewählte Mail ist immer enthalten
    * (entry.current = true); fehlt sie in den Treffern, wird opts.currentMessage eingesetzt.
-   * opts: { normalized, prefixes, currentInternetMessageId, currentRestId, currentMessage, maxResults, useSubject }
+   * opts: { normalized, prefixes, currentInternetMessageId, currentRestId, currentMessage, maxResults, useSubject, terms, termHits }
    * Rückgabe: { items, total }
    */
   function mergeResults(conversation, subject, opts) {
@@ -119,6 +190,11 @@
     if (opts.useSubject && target) {
       (subject || []).forEach(function (m) {
         if (compareKey(normalizeSubject(m && m.subject, null, res)) === target) add(m, 'subject');
+      });
+    }
+    if (opts.terms && opts.terms.length) {
+      (opts.termHits || []).forEach(function (m) {
+        if (m && subjectHasTerm(m.subject, opts.terms)) add(m, 'term');
       });
     }
     if (!current && opts.currentMessage) {
@@ -171,6 +247,10 @@
     normalizeSubject: normalizeSubject,
     compareKey: compareKey,
     buildSearch: buildSearch,
+    parseTerms: parseTerms,
+    buildTermsSearch: buildTermsSearch,
+    subjectHasTerm: subjectHasTerm,
+    relatedQuery: relatedQuery,
     mergeResults: mergeResults,
     formatTimestamp: formatTimestamp,
     personName: personName,

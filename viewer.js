@@ -86,16 +86,13 @@
   function search() {
     view = { kind: 'loading' };
     render();
-    function run(mode) {
-      return callXob('mail.related', {
-        conversationId: topic.conversationId || '',
-        search: topic.useSubject ? Core.buildSearch(topic.normalized, mode) : '',
-        top: topic.top || 50
-      });
-    }
-    run(topic.mode || 'subject').catch(function (e) {
-      if (topic.useSubject && (topic.mode || 'subject') === 'subject' && e.code !== 'UNAUTHORIZED' && e.code !== 'NETWORK') return run('all');
-      throw e;
+    Core.relatedQuery(callXob, {
+      conversationId: topic.conversationId || '',
+      normalized: topic.normalized,
+      useSubject: topic.useSubject,
+      mode: topic.mode,
+      terms: topic.terms || [],
+      top: topic.top || 50
     }).then(function (json) {
       var data = json.data || {};
       var result = Core.mergeResults(data.conversation || [], data.subject || [], {
@@ -105,13 +102,15 @@
         currentRestId: topic.curRest,
         currentMessage: topic.cur || null,
         maxResults: topic.maxResults || 25,
-        useSubject: topic.useSubject
+        useSubject: topic.useSubject,
+        terms: topic.terms || [],
+        termHits: data.terms || []
       });
       view = {
         kind: 'results', ms: json._ms, conversationOnly: !topic.useSubject,
         count: result.total > result.items.length ? result.items.length + ' von ' + result.total : String(result.items.length),
         total: result.total,
-        items: result.items.map(function (e) { var m = Object.assign({}, e.message); m.__current = !!e.current; return m; })
+        items: result.items.map(function (e) { var m = Object.assign({}, e.message); m.__current = !!e.current; m.__sources = e.sources; return m; })
       };
       render();
     }).catch(function (e) {
@@ -138,7 +137,8 @@
       received: m.receivedDateTime || m.sentDateTime || '',
       hasAttachments: !!m.hasAttachments,
       flag: Core.flagState(m),
-      current: !!m.__current
+      current: !!m.__current,
+      sources: m.__sources || []
     };
   }
 
@@ -190,6 +190,8 @@
   function render() {
     var subj = (topic && topic.normalized) || '–';
     $('subject').textContent = subj;
+    var terms = (topic && topic.terms) || [];
+    $('terms').textContent = terms.length ? 'Begriffe: ' + terms.join('; ') : '';
     $('subject').title = (topic && topic.raw) || subj;
     document.title = 'xOrg – ' + subj;
     var body = $('rows');
@@ -204,7 +206,7 @@
     var items = visibleItems();
     var total = (view.items || []).length;
     $('count').textContent = items.length === total ? (view.count || String(total)) : items.length + ' von ' + total;
-    $('meta').textContent = 'xob · ' + view.ms + ' ms' + (view.conversationOnly ? ' · nur Conversation (Betreff zu kurz)' : '');
+    $('meta').textContent = 'xob · ' + view.ms + ' ms' + (view.conversationOnly ? ' · Betreff zu kurz, nur Conversation' : '');
 
     if (!total) { setState('Keine Mails gefunden.'); return; }
     if (!items.length) { setState('Kein Treffer für diesen Filter.'); return; }
@@ -213,6 +215,8 @@
     items.forEach(function (it) {
       var tr = document.createElement('tr');
       tr.tabIndex = 0;
+      var SRC = { conversation: 'Unterhaltung', subject: 'gleicher Betreff', term: 'Suchbegriff', current: 'ausgewählte Mail' };
+      tr.title = 'Gefunden über: ' + it.sources.map(function (k) { return SRC[k] || k; }).join(', ');
       tr.setAttribute('aria-selected', 'false');
       var fromCell = td('from', '', it.fromAddress || it.from);
       if (it.current) {

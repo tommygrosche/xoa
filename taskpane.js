@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.3.0';
+  var VERSION = '1.4.0';
   var SETTINGS_KEY = 'xoaConfig';
   var Core = window.XoaCore;
 
@@ -316,7 +316,8 @@
 
     var useSubject = normalized.length >= (parseInt(config.minSubjectLength, 10) || 5);
     var conversationId = item.conversationId || '';
-    if (!conversationId && !useSubject) {
+    var terms = Core.parseTerms($('terms').value);
+    if (!conversationId && !useSubject && !terms.length) {
       setState('Betreff zu kurz und keine Conversation-ID vorhanden.');
       return;
     }
@@ -331,6 +332,7 @@
       top: Math.min(100, Math.max(parseInt(config.fetchTop, 10) || 50, (parseInt(config.maxResults, 10) || 25) * 2)),
       maxResults: config.maxResults,
       prefixes: config.prefixes,
+      terms: terms,
       curImid: item.internetMessageId || '',
       curRest: currentRestId(item) || '',
       cur: currentAsMessage(item, currentRestId(item))
@@ -338,23 +340,13 @@
     setState('Suche läuft…');
     if (canUseWindow()) $('list').innerHTML = ''; else showSkeleton();
 
-    var top = Math.min(100, Math.max(parseInt(config.fetchTop, 10) || 50, (parseInt(config.maxResults, 10) || 25) * 2));
-    var mode = config.searchMode === 'all' ? 'all' : 'subject';
-
-    function run(searchMode) {
-      return callXob('mail.related', {
-        conversationId: conversationId,
-        search: useSubject ? Core.buildSearch(normalized, searchMode) : '',
-        top: top
-      });
-    }
-
-    run(mode).catch(function (e) {
-      // Fallback: Betreff-Suche im Feldmodus wird von Graph abgelehnt -> allgemeine Suche
-      if (useSubject && mode === 'subject' && e.code !== 'UNAUTHORIZED' && e.code !== 'NETWORK' && e.code !== 'TIMEOUT') {
-        return run('all');
-      }
-      throw e;
+    Core.relatedQuery(callXob, {
+      conversationId: conversationId,
+      normalized: normalized,
+      useSubject: useSubject,
+      mode: lastTopic.mode,
+      terms: terms,
+      top: lastTopic.top
     }).then(function (json) {
       if (token !== runToken) return;
       var data = json.data || {};
@@ -365,9 +357,12 @@
         currentRestId: currentRestId(item),
         currentMessage: lastTopic.cur,
         maxResults: config.maxResults,
-        useSubject: useSubject
+        useSubject: useSubject,
+        terms: terms,
+        termHits: data.terms || []
       });
-      $('meta').textContent = 'xob · ' + json._ms + ' ms' + (useSubject ? '' : ' · nur Conversation (Betreff zu kurz)');
+      $('meta').textContent = 'xob · ' + json._ms + ' ms' + (useSubject ? '' : ' · Betreff zu kurz, nur Conversation') +
+        (terms.length ? ' · Begriffe: ' + terms.join('; ') : '');
       var countLabel = result.total > result.items.length
         ? result.items.length + ' von ' + result.total
         : String(result.items.length);
@@ -521,6 +516,7 @@
   function bindUi() {
     $('btnRefresh').addEventListener('click', refresh);
     $('btnOpenWindow').addEventListener('click', openWindow);
+    $('termForm').addEventListener('submit', function (ev) { ev.preventDefault(); refresh(); });
     $('btnSettings').addEventListener('click', function () { if ($('viewSettings').hidden) openSettings(); else closeSettings(); });
     $('btnClose').addEventListener('click', closeSettings);
     $('btnSave').addEventListener('click', saveSettings);
@@ -557,7 +553,7 @@
     loadConfig();
     bindUi();
     try {
-      Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, function () { closeSettings(); refresh(); });
+      Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, function () { closeSettings(); $('terms').value = ''; refresh(); });
     } catch (e) { /* ohne Pinning */ }
     refresh();
   });
