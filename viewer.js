@@ -5,6 +5,7 @@
  *   topic()            -> Promise<{ raw, normalized, terms, label }>
  *   search()           -> Promise<{ items, total, ms } | { error }>
  *   openMail(link, id) -> Promise<{ ok, error? }>
+ *   openOn             optional: 'dblclick' = Mail erst nach Doppelklick öffnen (Standard: ein Klick)
  *   onRefresh(cb)      Aufruf, wenn das Fenster neu suchen soll
  */
 (function () {
@@ -228,7 +229,10 @@
       textRow.appendChild(tc);
       group.appendChild(textRow);
 
-      group.addEventListener('click', function () { select(group, it); openItem(it); });
+      // Standard (xOrg Desktop): ein Klick öffnet. Setzt die App window.related.openOn = 'dblclick' (XOA), öffnet erst der Doppelklick.
+      var dbl = window.related.openOn === 'dblclick';
+      group.addEventListener('click', function () { select(group, it); if (!dbl) openItem(it); });
+      if (dbl) group.addEventListener('dblclick', function () { select(group, it); openItem(it); });
       group.addEventListener('keydown', function (ev) {
         if (ev.key === 'Enter') { ev.preventDefault(); openItem(it); }
         else if (ev.key === 'ArrowDown' && group.nextSibling) { ev.preventDefault(); group.nextSibling.focus(); }

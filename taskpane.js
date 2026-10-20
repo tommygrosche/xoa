@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.8.0';
+  var VERSION = '1.9.0';
   var SETTINGS_KEY = 'xoaConfig';
   var Core = window.XoaCore;
 
@@ -245,13 +245,16 @@
   // Zahl der schon offenen Fenster: das nächste Fenster öffnet an derselben Stelle, je offenem
   // Fenster 30 Pixel nach rechts unten versetzt.
   var WINDOW_STEP = 30;
+  // Startgröße ohne gemerkte Größe: 1650 x 930, höchstens 92 % des Bildschirms
+  function startW() { return Math.round(Math.min(1650, ((window.screen && window.screen.availWidth) || 1920) * 0.92)); }
+  function startH() { return Math.round(Math.min(930, ((window.screen && window.screen.availHeight) || 1080) * 0.92)); }
   function windowFeatures() {
     var g = null, open = {}, off = 0;
     try { g = JSON.parse(localStorage.getItem('xoaViewerGeom') || 'null'); } catch (e) { g = null; }
     try { open = JSON.parse(localStorage.getItem('xoaViewerOpen') || '{}') || {}; } catch (e) { open = {}; }
     var now = Date.now();
     var alive = Object.keys(open).filter(function (k) { return now - open[k] < 6000; }).length;
-    if (!g || !(g.w > 300 && g.h > 200)) return { offset: 0, features: 'popup=yes,width=1100,height=620' };
+    if (!g || !(g.w > 300 && g.h > 200)) return { offset: 0, features: 'popup=yes,width=' + startW() + ',height=' + startH() };
     off = alive * WINDOW_STEP;
     var maxX = Math.max(0, (window.screen.availWidth || 1920) - g.w);
     var maxY = Math.max(0, (window.screen.availHeight || 1080) - g.h);
@@ -289,21 +292,6 @@
       if (Office.context.ui && Office.context.ui.openBrowserWindow) { Office.context.ui.openBrowserWindow(url); return; }
     } catch (e) { /* weiter mit window.open */ }
     window.open(url, '_blank', 'noopener');
-  }
-
-  // Das Suchfenster ist eine eigene Webseite ohne Zugriff auf Outlook. Es bittet das Panel per
-  // BroadcastChannel, die Mail im Outlook-Fenster zu öffnen (displayMessageFormAsync) und wartet auf die Quittung.
-  function listenForOpenRequests() {
-    if (typeof BroadcastChannel === 'undefined') return;
-    try {
-      var ch = new BroadcastChannel('xoa-open-mail');
-      ch.onmessage = function (ev) {
-        var d = ev && ev.data;
-        if (!d || d.type !== 'open' || !d.id) return;
-        ch.postMessage({ type: 'ack', reqId: d.reqId });
-        openMessage({ id: d.id, webLink: d.webLink || '' });
-      };
-    } catch (e) { /* ohne Kanal öffnet das Suchfenster die Mail selbst */ }
   }
 
   function openMessage(m) {
@@ -599,7 +587,6 @@
 
   function bindUi() {
     buildFullTextSwitch();
-    listenForOpenRequests();
     $('btnRefresh').addEventListener('click', refresh);
     $('btnOpenWindow').addEventListener('click', openWindow);
     $('termForm').addEventListener('submit', function (ev) { ev.preventDefault(); refresh(); });

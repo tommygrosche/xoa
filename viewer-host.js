@@ -19,8 +19,7 @@
   var topic = null;
   var cfg = null;
   var offset = 0;
-  var mailCount = -1;
-  var HOST_VERSION = '1.8.0';
+  var HOST_VERSION = '1.9.0';
   var openedBy = 'unknown';
 
   // ---------- Parameter, Speicher ----------
@@ -147,34 +146,14 @@
       return Promise.resolve(topic ? { raw: topic.raw, normalized: topic.normalized, terms: topic.terms || [], fullText: !!topic.fullText, banners: Core.DEFAULT_BANNERS, label: 'Related emails' } : null);
     },
     search: search,
-    // Erst das Panel bitten (öffnet die Mail im Outlook-Fenster); antwortet es nicht, Popup bzw. Tab.
-    openMail: function (link, id) {
-      if (!link && !id) return Promise.resolve({ ok: false, error: 'No link available for this email.' });
-      function viaBrowser() {
-        var n = (mailCount = (mailCount + 1) % 8);
-        var feat = 'popup=yes,width=1000,height=800,left=' + (80 + n * 30) + ',top=' + (60 + n * 30);
-        var w = null;
-        if (link) { try { w = window.open(link, 'xoaMail' + Date.now(), feat); } catch (e) { w = null; } }
-        if (!w && link) window.open(link, '_blank', 'noopener');
-        return { ok: !!link, error: link ? undefined : 'No link available for this email.' };
-      }
-      if (!id || typeof BroadcastChannel === 'undefined') return Promise.resolve(viaBrowser());
-      return new Promise(function (resolve) {
-        var ch = null, reqId = String(Date.now()) + Math.random().toString(16).slice(2, 6), done = false;
-        function finish(r) { if (done) return; done = true; try { ch.close(); } catch (e) { /* egal */ } resolve(r); }
-        try {
-          ch = new BroadcastChannel('xoa-open-mail');
-          ch.onmessage = function (ev) { if (ev.data && ev.data.type === 'ack' && ev.data.reqId === reqId) finish({ ok: true }); };
-          ch.postMessage({ type: 'open', id: id, webLink: link || '', reqId: reqId });
-        } catch (e) { finish(viaBrowser()); return; }
-        setTimeout(function () { finish(viaBrowser()); }, 1500);
-      });
+    // Mail nur nach Doppelklick öffnen (Outlook lässt kein eigenes Fenster zu: Die Mail geht im Browser auf).
+    openOn: 'dblclick',
+    openMail: function (link) {
+      if (!link) return Promise.resolve({ ok: false, error: 'No link available for this email.' });
+      window.open(link, '_blank', 'noopener');
+      return Promise.resolve({ ok: true });
     },
-    // Diagnose (Fußzeile): Version, wie das Fenster geöffnet wurde, ob es ein Popup oder ein Tab ist
-    info: function () {
-      var mode = (window.toolbar && window.toolbar.visible === false) ? 'popup' : 'tab';
-      return 'xoa ' + HOST_VERSION + ' · ' + openedBy + ' · ' + mode;
-    },
+    info: function () { return 'xoa ' + HOST_VERSION; },
     onRefresh: function () { /* der Aktualisieren-Knopf genügt */ }
   };
 
