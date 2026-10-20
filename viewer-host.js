@@ -19,7 +19,7 @@
   var topic = null;
   var cfg = null;
   var offset = 0;
-  var HOST_VERSION = '1.10.0';
+  var HOST_VERSION = '1.10.1';
   var openedBy = 'unknown';
 
   // ---------- Parameter, Speicher ----------
