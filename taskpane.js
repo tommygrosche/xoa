@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.6.1';
+  var VERSION = '1.7.0';
   var SETTINGS_KEY = 'xoaConfig';
   var Core = window.XoaCore;
 

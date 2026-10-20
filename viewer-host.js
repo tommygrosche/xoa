@@ -19,6 +19,7 @@
   var topic = null;
   var cfg = null;
   var offset = 0;
+  var mailCount = -1;
 
   // ---------- Parameter, Speicher ----------
   function unb64(s) {
@@ -145,13 +146,41 @@
     search: search,
     openMail: function (link) {
       if (!link) return Promise.resolve({ ok: false, error: 'No link available for this email.' });
-      window.open(link, '_blank', 'noopener');
+      // eigenes Popup-Fenster derselben Browser-Instanz (Anmeldung bleibt erhalten), leicht versetzt je Mail
+      var n = (mailCount = (mailCount + 1) % 8);
+      var feat = 'popup=yes,width=1000,height=800,left=' + (80 + n * 30) + ',top=' + (60 + n * 30);
+      var w = null;
+      try { w = window.open(link, 'xoaMail' + Date.now(), feat); } catch (e) { w = null; }
+      if (!w) window.open(link, '_blank', 'noopener');
       return Promise.resolve({ ok: true });
     },
     onRefresh: function () { /* der Aktualisieren-Knopf genügt */ }
   };
 
+  // Das Fenster setzt Größe und Lage selbst. Das Panel (Outlook) und dieses Fenster teilen sich nicht
+  // immer denselben Speicher (Outlook-WebView2 gegen Edge/Chrome); die Fenster untereinander schon.
+  function placeSelf() {
+    var g = load('local', GEOM_KEY);
+    if (!g || !(g.w > 300 && g.h > 200)) return;
+    var open = load('local', OPEN_KEY) || {};
+    var now = Date.now();
+    var others = Object.keys(open).filter(function (k) { return k !== winId && now - open[k] < 6000; }).length;
+    offset = others * 30;
+    var availW = (window.screen && window.screen.availWidth) || 1920;
+    var availH = (window.screen && window.screen.availHeight) || 1080;
+    var x = Math.round(g.x) + offset, y = Math.round(g.y) + offset;
+    if (x + g.w > availW || y + g.h > availH) { x = Math.round(g.x); y = Math.round(g.y); offset = 0; }
+    x = Math.max(0, x); y = Math.max(0, y);
+    try {
+      var frameW = Math.max(0, window.outerWidth - window.innerWidth);
+      var frameH = Math.max(0, window.outerHeight - window.innerHeight);
+      window.resizeTo(Math.round(g.w) + frameW, Math.round(g.h) + frameH);
+      window.moveTo(x, y);
+    } catch (e) { /* Tab statt Fenster: nichts zu tun */ }
+  }
+
   readParams();
+  placeSelf();
   heartbeat();
   setInterval(function () { heartbeat(); remember(); }, 2000);
   window.addEventListener('resize', remember);
