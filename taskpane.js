@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.7.1';
+  var VERSION = '1.8.0';
   var SETTINGS_KEY = 'xoaConfig';
   var Core = window.XoaCore;
 
@@ -289,6 +289,21 @@
       if (Office.context.ui && Office.context.ui.openBrowserWindow) { Office.context.ui.openBrowserWindow(url); return; }
     } catch (e) { /* weiter mit window.open */ }
     window.open(url, '_blank', 'noopener');
+  }
+
+  // Das Suchfenster ist eine eigene Webseite ohne Zugriff auf Outlook. Es bittet das Panel per
+  // BroadcastChannel, die Mail im Outlook-Fenster zu öffnen (displayMessageFormAsync) und wartet auf die Quittung.
+  function listenForOpenRequests() {
+    if (typeof BroadcastChannel === 'undefined') return;
+    try {
+      var ch = new BroadcastChannel('xoa-open-mail');
+      ch.onmessage = function (ev) {
+        var d = ev && ev.data;
+        if (!d || d.type !== 'open' || !d.id) return;
+        ch.postMessage({ type: 'ack', reqId: d.reqId });
+        openMessage({ id: d.id, webLink: d.webLink || '' });
+      };
+    } catch (e) { /* ohne Kanal öffnet das Suchfenster die Mail selbst */ }
   }
 
   function openMessage(m) {
@@ -584,6 +599,7 @@
 
   function bindUi() {
     buildFullTextSwitch();
+    listenForOpenRequests();
     $('btnRefresh').addEventListener('click', refresh);
     $('btnOpenWindow').addEventListener('click', openWindow);
     $('termForm').addEventListener('submit', function (ev) { ev.preventDefault(); refresh(); });
