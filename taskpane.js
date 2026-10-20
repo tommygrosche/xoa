@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.9.0';
+  var VERSION = '1.10.0';
   var SETTINGS_KEY = 'xoaConfig';
   var Core = window.XoaCore;
 
@@ -264,8 +264,44 @@
     return { offset: off, features: 'popup=yes,width=' + Math.round(g.w) + ',height=' + Math.round(g.h) + ',left=' + x + ',top=' + y };
   }
 
+  // Wo das Suchfenster aufgeht: 'popup' = eigenes Fenster (Outlook legt es an), 'browser' = Tab im Standardbrowser des Systems
+  // (z. B. Firefox, wenn der als Standardbrowser eingestellt ist). Ein Add-in kann keinen bestimmten Browser starten.
+  var WC_KEY = 'xoaWindowControl';
+  function windowControl() {
+    var v = null;
+    try { v = localStorage.getItem(WC_KEY); } catch (e) { v = null; }
+    return v === 'browser' ? 'browser' : 'popup';
+  }
+  function buildWindowControlSelect() {
+    var btn = $('btnOpenWindow');
+    if (!btn || $('windowControl')) return;
+    var sel = document.createElement('select');
+    sel.id = 'windowControl';
+    sel.title = 'Fenster: eigenes Fenster (Popup) oder Tab im Standardbrowser des Systems. Mails öffnen immer im Standardbrowser.';
+    sel.style.cssText = 'margin-left:6px;height:28px;font:inherit;max-width:150px';
+    [['popup', 'Fenster'], ['browser', 'Browser-Tab']].forEach(function (o) {
+      var opt = document.createElement('option');
+      opt.value = o[0]; opt.textContent = o[1];
+      sel.appendChild(opt);
+    });
+    sel.value = windowControl();
+    sel.addEventListener('change', function () {
+      try { localStorage.setItem(WC_KEY, sel.value); } catch (e) { /* egal */ }
+    });
+    btn.insertAdjacentElement('afterend', sel);
+  }
+
+  function openInBrowser() {
+    var url = viewerUrl(lastTopic, 0, 'openBrowserWindow');
+    try {
+      if (Office.context.ui && Office.context.ui.openBrowserWindow) { Office.context.ui.openBrowserWindow(url); return; }
+    } catch (e) { /* weiter */ }
+    window.open(url, '_blank');
+  }
+
   function openWindow() {
     if (!lastTopic) { toast('Wähle zuerst eine Mail aus.'); return; }
+    if (windowControl() === 'browser') { openInBrowser(); return; }
     var w = windowFeatures();
     var url = viewerUrl(lastTopic, w.offset);
     // Eigenes Fenster (merkt sich Größe und Lage); wird es blockiert, bleibt der Browser-Tab als Rückfall
@@ -587,6 +623,7 @@
 
   function bindUi() {
     buildFullTextSwitch();
+    buildWindowControlSelect();
     $('btnRefresh').addEventListener('click', refresh);
     $('btnOpenWindow').addEventListener('click', openWindow);
     $('termForm').addEventListener('submit', function (ev) { ev.preventDefault(); refresh(); });
