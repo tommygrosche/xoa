@@ -1,109 +1,129 @@
+/*
+ * xOrg / XOA - Fenster "Related emails" (gemeinsame Oberfläche)
+ * Dieselbe Datei wird in xOrg Desktop (related.css) und in XOA (viewer.css) verwendet.
+ * Alle Größen sind in em: Das Skript setzt die Schriftgröße der Seite aus der Fensterbreite,
+ * damit Schrift, Icons und Abstände mit der Breite wachsen. Die Höhe bestimmt nur,
+ * wie viele Mails sichtbar sind.
+ */
 :root {
+  color-scheme: light;
   --bg: #ffffff;
-  --bg-soft: #f5f5f5;
-  --bg-sel: #ebf3fc;
-  --fg: #242424;
-  --fg-2: #616161;
-  --fg-3: #8a8a8a;
-  --line: #e0e0e0;
-  --brand: #0f6cbd;
-  --danger: #c50f1f;
-  --success: #107c10;
-  --focus: #0f6cbd;
-  --radius: 6px;
-  --font: "Segoe UI", "Segoe UI Web (West European)", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1f1f1f; --bg-soft: #292929; --bg-sel: #082338;
-    --fg: #ffffff; --fg-2: #d6d6d6; --fg-3: #adadad; --line: #3d3d3d;
-    --brand: #479ef5; --danger: #f1707b; --success: #54b054; --focus: #62abf5;
-  }
+  --bg-soft: #f6f7f9;
+  --bg-sel: #e8f0fd;
+  --fg: #2b2f36;
+  --fg-2: #4b5563;
+  --fg-3: #6b7280;
+  --line: #e3e6eb;
+  --line-strong: #d0d5dd;
+  --brand: #2f6fe4;
+  --danger: #d9480f;
+  --success: #2f9e44;
+  --focus: #2f6fe4;
+  --radius: .5em;
+  --font: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; }
+html { font-size: 13px; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
 body {
   display: flex; flex-direction: column;
-  background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 13px; line-height: 1.35;
+  background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 1rem; line-height: 1.35;
 }
+
+/* ---------- Kopf ---------- */
 .win-header {
-  display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex: 0 0 auto;
+  display: flex; align-items: center; gap: .9em; padding: .6em 1em; flex: 0 0 auto;
+  background: var(--bg-soft); border-bottom: 1px solid var(--line-strong);
 }
 .win-logo { display: inline-flex; flex: 0 0 auto; }
-.win-logo img { width: 58px; height: 20px; display: block; }
+.win-logo img { height: 1.7em; width: auto; display: block; }
 .win-title { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
-.win-label { font-size: 11px; color: var(--fg-3); }
-.win-subject { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.win-count { color: var(--fg-3); font-size: 12px; white-space: nowrap; }
+.win-label { font-size: .85em; color: var(--fg-3); }
+.win-subject { font-weight: 600; font-size: 1.1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.win-terms { font-size: .85em; color: var(--brand); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.win-terms:empty { display: none; }
+.win-count { color: var(--fg-3); font-size: .9em; white-space: nowrap; }
 #filter {
-  width: 200px; flex: 0 1 200px; height: 30px; padding: 0 8px; font: inherit; color: var(--fg); background: var(--bg);
-  border: 1px solid var(--line); border-bottom-color: var(--fg-3); border-radius: var(--radius);
+  width: 14em; flex: 0 1 14em; height: 2.2em; padding: 0 .6em; font: inherit; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
 }
 .icon-btn {
-  width: 32px; height: 32px; border: 0; background: transparent; color: var(--fg-2); border-radius: var(--radius);
+  width: 2.3em; height: 2.3em; border: 1px solid var(--line-strong); background: var(--bg); color: var(--fg-2); border-radius: var(--radius);
   display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: 0 0 auto;
 }
-.icon-btn:hover { background: var(--bg-soft); color: var(--fg); }
-.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn:hover { background: var(--bg-sel); color: var(--brand); border-color: var(--brand); }
+.icon-btn svg { width: 1.3em; height: 1.3em; }
 
-.table-wrap { flex: 1 1 auto; overflow: auto; }
+/* ---------- Tabelle ---------- */
+.table-wrap { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; min-height: 0; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-col.c-from { width: 18%; }
-col.c-to { width: 20%; }
-col.c-subject { width: auto; }
-col.c-received { width: 150px; }
-col.c-icon { width: 34px; }
 thead th {
-  position: sticky; top: 0; z-index: 1; background: var(--bg); border-bottom: 1px solid var(--line);
-  text-align: left; font-weight: 600; padding: 0;
+  position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line-strong);
+  text-align: left; font-weight: 600; padding: 0; position: sticky;
 }
-thead th button {
-  width: 100%; height: 32px; padding: 0 10px; border: 0; background: transparent; color: var(--fg-2);
-  font: inherit; font-weight: 600; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 4px;
+thead th .hd { position: relative; display: block; }
+thead th button.sort {
+  width: 100%; height: 2.4em; padding: 0 .8em; border: 0; background: transparent; color: var(--fg-2);
+  font: inherit; font-weight: 600; text-align: left; cursor: pointer; display: flex; align-items: center; gap: .3em;
 }
-thead th button:hover { background: var(--bg-soft); color: var(--fg); }
-thead th.ic button { justify-content: center; padding: 0; }
-thead th button svg { width: 14px; height: 14px; }
-thead th[aria-sort] button::after { content: ""; border: 4px solid transparent; margin-left: 2px; }
-thead th[aria-sort="ascending"] button::after { border-bottom-color: currentColor; margin-top: -4px; }
-thead th[aria-sort="descending"] button::after { border-top-color: currentColor; margin-top: 4px; }
-thead th.ic[aria-sort] button::after { display: none; }
+thead th button.sort:hover { background: var(--bg-soft); color: var(--fg); }
+thead th.ic button.sort { justify-content: center; padding: 0; }
+thead th button.sort svg { width: 1.1em; height: 1.1em; }
+thead th[aria-sort] button.sort::after { content: ""; border: .32em solid transparent; margin-left: .15em; }
+thead th[aria-sort="ascending"] button.sort::after { border-bottom-color: currentColor; margin-top: -.32em; }
+thead th[aria-sort="descending"] button.sort::after { border-top-color: currentColor; margin-top: .32em; }
+thead th.ic[aria-sort] button.sort::after { display: none; }
+.grip { position: absolute; top: 0; right: -3px; width: 7px; height: 100%; cursor: col-resize; z-index: 3; }
+.grip::after { content: ""; position: absolute; left: 3px; top: 25%; height: 50%; width: 1px; background: var(--line-strong); }
+.grip:hover::after, .grip.drag::after { background: var(--brand); width: 2px; left: 2px; }
+tr.filters th { top: 2.4em; background: var(--bg); padding: .25em .4em; border-bottom: 1px solid var(--line-strong); }
+tr.filters input {
+  width: 100%; height: 1.9em; padding: 0 .5em; font: inherit; font-size: .92em; color: var(--fg); background: var(--bg-soft);
+  border: 1px solid var(--line); border-radius: .4em;
+}
+tr.filters input:focus { background: var(--bg); border-color: var(--brand); outline: none; }
+tr.filters button.tog {
+  width: 100%; height: 1.9em; border: 1px solid var(--line); border-radius: .4em; background: var(--bg-soft); color: var(--fg-3); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+tr.filters button.tog svg { width: 1em; height: 1em; }
+tr.filters button.tog.on { background: var(--bg-sel); color: var(--brand); border-color: var(--brand); }
 
-tbody tr { cursor: default; }
-tbody tr:hover { background: var(--bg-soft); }
-tbody tr.sel { background: var(--bg-sel); }
-tbody tr:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-tbody td {
-  padding: 6px 10px; border-bottom: 1px solid var(--line);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none; -webkit-user-select: none;
+/* je Mail zwei Zeilen: Kopfzeile + Textvorschau, getrennt durch eine feine Linie */
+tbody.mail { border-bottom: 1px solid var(--line); }
+tbody.mail tr { cursor: pointer; }
+tbody.mail:hover tr, tbody.mail.sel tr { background: var(--bg-soft); }
+tbody.mail.sel tr { background: var(--bg-sel); }
+tbody.mail td {
+  padding: .4em .8em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none; -webkit-user-select: none;
 }
+tbody.mail tr.head td { padding-bottom: .1em; }
+tbody.mail tr.text td {
+  padding-top: 0; padding-bottom: .45em; color: var(--fg-3); font-size: .92em; white-space: normal;
+  display: table-cell; overflow: hidden; line-height: 1.35; max-height: 2.8em;
+}
+tbody.mail tr.text .snip { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+tbody.mail:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+tbody.mail { outline: none; }
 td.from { font-weight: 600; }
 td.to { color: var(--fg-2); }
+td.subject { font-weight: 500; }
 td.received { color: var(--fg-2); font-variant-numeric: tabular-nums; }
-td.ic { text-align: center; padding: 6px 0; color: var(--fg-2); }
-td.ic svg { width: 14px; height: 14px; vertical-align: -2px; }
+td.ic { text-align: center; padding: .4em 0; color: var(--fg-2); }
+td.ic svg { width: 1.1em; height: 1.1em; vertical-align: -.2em; }
 td.flag.flagged { color: var(--danger); }
 td.flag.complete { color: var(--success); }
+tbody.mail.current tr.head td:first-child { box-shadow: inset .25em 0 0 var(--brand); }
+.cur-badge {
+  display: inline-block; margin-right: .5em; padding: 0 .4em; border: 1px solid var(--brand); border-radius: .8em;
+  font-size: .8em; font-weight: 600; color: var(--brand); vertical-align: .1em;
+}
 
-.state { padding: 16px 14px; color: var(--fg-2); }
+.state { padding: 1.2em 1em; color: var(--fg-2); }
 .state.error { color: var(--danger); }
 .state:empty { display: none; }
 .win-footer {
-  display: flex; justify-content: space-between; gap: 12px; padding: 6px 14px; border-top: 1px solid var(--line);
-  font-size: 11px; color: var(--fg-3); flex: 0 0 auto;
+  display: flex; justify-content: space-between; gap: 1em; padding: .4em 1em; border-top: 1px solid var(--line-strong);
+  font-size: .85em; color: var(--fg-3); flex: 0 0 auto; background: var(--bg-soft);
 }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-
-@media (max-width: 640px) {
-  #filter { width: 120px; flex-basis: 120px; }
-  col.c-from { width: 24%; }
-  col.c-to { width: 18%; }
-}
-
-tbody tr.current td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
-.cur-badge {
-  display: inline-block; margin-right: 6px; padding: 0 5px; border: 1px solid var(--brand); border-radius: 8px;
-  font-size: 10px; font-weight: 600; color: var(--brand); vertical-align: 1px;
-}
-.win-terms { font-size: 11px; color: var(--brand); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.win-terms:empty { display: none; }

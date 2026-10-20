@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.4.0';
+  var VERSION = '1.6.0';
   var SETTINGS_KEY = 'xoaConfig';
   var Core = window.XoaCore;
 
@@ -235,19 +235,44 @@
     return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
   }
 
-  function viewerUrl(topic) {
+  function viewerUrl(topic, offset) {
     var base = location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, 'viewer.html');
     var cfg = { u: config.xobMailUrl, k: config.xobKey };
-    return base + '#t=' + encodeURIComponent(b64(topic)) + '&c=' + encodeURIComponent(b64(cfg));
+    return base + '#o=' + (offset || 0) + '&t=' + encodeURIComponent(b64(topic)) + '&c=' + encodeURIComponent(b64(cfg));
+  }
+
+  // Größe und Lage des letzten Fensters (vom Fenster selbst im localStorage abgelegt) und
+  // Zahl der schon offenen Fenster: das nächste Fenster öffnet an derselben Stelle, je offenem
+  // Fenster 30 Pixel nach rechts unten versetzt.
+  var WINDOW_STEP = 30;
+  function windowFeatures() {
+    var g = null, open = {}, off = 0;
+    try { g = JSON.parse(localStorage.getItem('xoaViewerGeom') || 'null'); } catch (e) { g = null; }
+    try { open = JSON.parse(localStorage.getItem('xoaViewerOpen') || '{}') || {}; } catch (e) { open = {}; }
+    var now = Date.now();
+    var alive = Object.keys(open).filter(function (k) { return now - open[k] < 6000; }).length;
+    if (!g || !(g.w > 300 && g.h > 200)) return { offset: 0, features: 'popup=yes,width=1100,height=620' };
+    off = alive * WINDOW_STEP;
+    var maxX = Math.max(0, (window.screen.availWidth || 1920) - g.w);
+    var maxY = Math.max(0, (window.screen.availHeight || 1080) - g.h);
+    var x = Math.round(g.x) + off, y = Math.round(g.y) + off;
+    if (x > maxX || y > maxY) { x = Math.round(g.x); y = Math.round(g.y); off = 0; }
+    x = Math.max(0, Math.min(x, maxX)); y = Math.max(0, Math.min(y, maxY));
+    return { offset: off, features: 'popup=yes,width=' + Math.round(g.w) + ',height=' + Math.round(g.h) + ',left=' + x + ',top=' + y };
   }
 
   function openWindow() {
     if (!lastTopic) { toast('Wähle zuerst eine Mail aus.'); return; }
-    var url = viewerUrl(lastTopic);
+    var w = windowFeatures();
+    var url = viewerUrl(lastTopic, w.offset);
+    // Eigenes Fenster (merkt sich Größe und Lage); wird es blockiert, bleibt der Browser-Tab als Rückfall
+    var win = null;
+    try { win = window.open(url, 'xoaRelated' + Date.now(), w.features); } catch (e) { win = null; }
+    if (win) return;
     try {
       if (Office.context.ui && Office.context.ui.openBrowserWindow) { Office.context.ui.openBrowserWindow(url); return; }
-    } catch (e) { /* weiter mit window.open */ }
-    window.open(url, '_blank');
+    } catch (e) { /* weiter */ }
+    toast('Das Fenster wurde blockiert. Erlaube Popups für dieses Add-in.');
   }
 
   // ---------- Mail öffnen ----------
@@ -288,6 +313,46 @@
     } catch (e) { openWeb(m.webLink); }
   }
 
+  // ---------- Schalter "Volltext" (Suchtext nur im Betreff oder auch im Mailtext) ----------
+  var FULL_KEY = 'xoaFullText';
+  function isFullText() {
+    var box = $('fullText');
+    return !!(box && box.checked);
+  }
+  function buildFullTextSwitch() {
+    var field = $('terms');
+    if (!field || $('fullText')) return;
+    var saved = null;
+    try { saved = localStorage.getItem(FULL_KEY); } catch (e) { saved = null; }
+    var style = document.createElement('style');
+    style.textContent =
+      '.xoa-switch{display:inline-flex;align-items:center;gap:6px;margin:4px 0;font-size:12px;cursor:pointer;user-select:none}' +
+      '.xoa-switch input{position:absolute;opacity:0;width:0;height:0}' +
+      '.xoa-switch .tr{position:relative;width:30px;height:16px;border-radius:8px;background:#b9bec7;flex:0 0 auto}' +
+      '.xoa-switch .tr::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff}' +
+      '.xoa-switch input:checked+.tr{background:#0f6cbd}' +
+      '.xoa-switch input:checked+.tr::after{left:16px}' +
+      '.xoa-switch input:focus-visible+.tr{outline:2px solid #0f6cbd;outline-offset:2px}';
+    document.head.appendChild(style);
+    var label = document.createElement('label');
+    label.className = 'xoa-switch';
+    label.title = 'Aus: Der Suchtext wird nur im Betreff gesucht. An: Volltextsuche, auch im Text der Mail (langsamer, mehr Treffer).';
+    var box = document.createElement('input');
+    box.type = 'checkbox';
+    box.id = 'fullText';
+    box.checked = saved === null ? config.searchMode === 'all' : saved === '1';
+    var track = document.createElement('span');
+    track.className = 'tr';
+    var text = document.createElement('span');
+    text.textContent = 'Volltext';
+    label.appendChild(box); label.appendChild(track); label.appendChild(text);
+    field.insertAdjacentElement('afterend', label);
+    box.addEventListener('change', function () {
+      try { localStorage.setItem(FULL_KEY, box.checked ? '1' : '0'); } catch (e) { /* egal */ }
+      refresh();
+    });
+  }
+
   // ---------- Hauptablauf ----------
   function refresh() {
     var token = ++runToken;
@@ -317,6 +382,7 @@
     var useSubject = normalized.length >= (parseInt(config.minSubjectLength, 10) || 5);
     var conversationId = item.conversationId || '';
     var terms = Core.parseTerms($('terms').value);
+    var fullText = isFullText();
     if (!conversationId && !useSubject && !terms.length) {
       setState('Betreff zu kurz und keine Conversation-ID vorhanden.');
       return;
@@ -333,6 +399,7 @@
       maxResults: config.maxResults,
       prefixes: config.prefixes,
       terms: terms,
+      fullText: fullText,
       curImid: item.internetMessageId || '',
       curRest: currentRestId(item) || '',
       cur: currentAsMessage(item, currentRestId(item))
@@ -346,6 +413,7 @@
       useSubject: useSubject,
       mode: lastTopic.mode,
       terms: terms,
+      fullText: fullText,
       top: lastTopic.top
     }).then(function (json) {
       if (token !== runToken) return;
@@ -359,10 +427,11 @@
         maxResults: config.maxResults,
         useSubject: useSubject,
         terms: terms,
+        fullText: fullText,
         termHits: data.terms || []
       });
       $('meta').textContent = 'xob · ' + json._ms + ' ms' + (useSubject ? '' : ' · Betreff zu kurz, nur Conversation') +
-        (terms.length ? ' · Begriffe: ' + terms.join('; ') : '');
+        (terms.length ? ' · ' + (fullText ? 'Volltext' : 'Betreff') + ': ' + terms.join('; ') : '');
       var countLabel = result.total > result.items.length
         ? result.items.length + ' von ' + result.total
         : String(result.items.length);
@@ -514,6 +583,7 @@
   }
 
   function bindUi() {
+    buildFullTextSwitch();
     $('btnRefresh').addEventListener('click', refresh);
     $('btnOpenWindow').addEventListener('click', openWindow);
     $('termForm').addEventListener('submit', function (ev) { ev.preventDefault(); refresh(); });

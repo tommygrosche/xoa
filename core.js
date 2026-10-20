@@ -89,10 +89,11 @@
   }
 
   // KQL für Graph $search: jeder Begriff als ganze Phrase im Betreff, verknüpft mit OR
-  function buildTermsSearch(terms) {
+  // fullText = true: Phrase in Betreff UND Mailtext (Graph durchsucht dann alle Felder), sonst nur im Betreff
+  function buildTermsSearch(terms, fullText) {
     var list = (terms || []).filter(Boolean);
     if (!list.length) return '';
-    return '"' + list.map(function (t) { return 'subject:\\"' + t + '\\"'; }).join(' OR ') + '"';
+    return '"' + list.map(function (t) { return (fullText ? '' : 'subject:') + '\\"' + t + '\\"'; }).join(' OR ') + '"';
   }
 
   // Enthält der Betreff mindestens einen Begriff vollständig (als ganze Phrase, nicht als Wortteil)?
@@ -118,7 +119,7 @@
       return {
         conversationId: p.conversationId || '',
         search: p.useSubject ? buildSearch(p.normalized, mode) : '',
-        terms: withTerms ? buildTermsSearch(terms) : '',
+        terms: withTerms ? buildTermsSearch(terms, p.fullText) : '',
         top: p.top || 50
       };
     }
@@ -127,7 +128,7 @@
       if (e && (e.code === 'UNAUTHORIZED' || e.code === 'NETWORK' || e.code === 'TIMEOUT')) throw e;
       var calls = [call('mail.related', payload('all', false))];
       terms.forEach(function (t) {
-        calls.push(call('mail.related', { conversationId: '', search: '', terms: buildTermsSearch([t]), top: p.top || 50 }));
+        calls.push(call('mail.related', { conversationId: '', search: '', terms: buildTermsSearch([t], p.fullText), top: p.top || 50 }));
       });
       return Promise.all(calls).then(function (rs) {
         var d = { conversation: [], subject: [], terms: [] };
@@ -194,7 +195,7 @@
     }
     if (opts.terms && opts.terms.length) {
       (opts.termHits || []).forEach(function (m) {
-        if (m && subjectHasTerm(m.subject, opts.terms)) add(m, 'term');
+        if (m && (opts.fullText || subjectHasTerm(m.subject, opts.terms))) add(m, 'term');
       });
     }
     if (!current && opts.currentMessage) {
