@@ -20,6 +20,8 @@
   var cfg = null;
   var offset = 0;
   var mailCount = -1;
+  var HOST_VERSION = '1.7.1';
+  var openedBy = 'unknown';
 
   // ---------- Parameter, Speicher ----------
   function unb64(s) {
@@ -46,11 +48,12 @@
     }
     if (!cfg) cfg = load('local', CFG_KEY);
     offset = parseInt(params.o, 10) || 0;
+    openedBy = params.m || 'unknown';
     if (params.t) topic = unb64(params.t);
     if (topic) {
       var id = params.id || String(Date.now()) + Math.random().toString(16).slice(2, 6);
       store('session', TOPIC_PREFIX + id, topic);
-      try { history.replaceState(null, '', location.pathname + '#id=' + id + '&o=' + offset + '&t=' + encodeURIComponent(b64(topic))); } catch (e) { /* egal */ }
+      try { history.replaceState(null, '', location.pathname + '#id=' + id + '&o=' + offset + '&m=' + encodeURIComponent(openedBy) + '&t=' + encodeURIComponent(b64(topic))); } catch (e) { /* egal */ }
     } else if (params.id) {
       topic = load('session', TOPIC_PREFIX + params.id);
     }
@@ -153,6 +156,11 @@
       try { w = window.open(link, 'xoaMail' + Date.now(), feat); } catch (e) { w = null; }
       if (!w) window.open(link, '_blank', 'noopener');
       return Promise.resolve({ ok: true });
+    },
+    // Diagnose (Fußzeile): Version, wie das Fenster geöffnet wurde, ob es ein Popup oder ein Tab ist
+    info: function () {
+      var mode = (window.toolbar && window.toolbar.visible === false) ? 'popup' : 'tab';
+      return 'xoa ' + HOST_VERSION + ' · ' + openedBy + ' · ' + mode;
     },
     onRefresh: function () { /* der Aktualisieren-Knopf genügt */ }
   };

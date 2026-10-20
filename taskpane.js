@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.7.0';
+  var VERSION = '1.7.1';
   var SETTINGS_KEY = 'xoaConfig';
   var Core = window.XoaCore;
 
@@ -235,10 +235,10 @@
     return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
   }
 
-  function viewerUrl(topic, offset) {
+  function viewerUrl(topic, offset, how) {
     var base = location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, 'viewer.html');
     var cfg = { u: config.xobMailUrl, k: config.xobKey };
-    return base + '#o=' + (offset || 0) + '&t=' + encodeURIComponent(b64(topic)) + '&c=' + encodeURIComponent(b64(cfg));
+    return base + '#o=' + (offset || 0) + '&m=' + (how || 'window.open') + '&t=' + encodeURIComponent(b64(topic)) + '&c=' + encodeURIComponent(b64(cfg));
   }
 
   // Größe und Lage des letzten Fensters (vom Fenster selbst im localStorage abgelegt) und
@@ -270,7 +270,7 @@
     try { win = window.open(url, 'xoaRelated' + Date.now(), w.features); } catch (e) { win = null; }
     if (win) return;
     try {
-      if (Office.context.ui && Office.context.ui.openBrowserWindow) { Office.context.ui.openBrowserWindow(url); return; }
+      if (Office.context.ui && Office.context.ui.openBrowserWindow) { Office.context.ui.openBrowserWindow(viewerUrl(lastTopic, 0, 'openBrowserWindow')); return; }
     } catch (e) { /* weiter */ }
     toast('Das Fenster wurde blockiert. Erlaube Popups für dieses Add-in.');
   }

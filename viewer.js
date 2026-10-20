@@ -180,7 +180,7 @@
     var items = visibleItems();
     var total = (view.items || []).length;
     $('count').textContent = items.length === total ? (view.count || String(total)) : items.length + ' of ' + total;
-    $('meta').textContent = 'XOB · ' + view.ms + ' ms';
+    $('meta').textContent = 'XOB · ' + view.ms + ' ms' + (window.related.info ? ' · ' + window.related.info() : '');
 
     if (!total) { setState('No emails found.'); return; }
     if (!items.length) { setState('No match for this filter.'); return; }
