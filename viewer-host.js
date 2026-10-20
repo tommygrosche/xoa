@@ -140,7 +140,7 @@
 
   window.related = {
     topic: function () {
-      return Promise.resolve(topic ? { raw: topic.raw, normalized: topic.normalized, terms: topic.terms || [], fullText: !!topic.fullText, label: 'Related emails' } : null);
+      return Promise.resolve(topic ? { raw: topic.raw, normalized: topic.normalized, terms: topic.terms || [], fullText: !!topic.fullText, banners: Core.DEFAULT_BANNERS, label: 'Related emails' } : null);
     },
     search: search,
     openMail: function (link) {

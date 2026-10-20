@@ -86,7 +86,7 @@
   function addrOf(r) { var e = r && r.emailAddress; return e ? (e.address || e.name || '') : ''; }
 
   function snippet(m) {
-    var t = String(m.bodyPreview || m.__text || '').replace(/\s+/g, ' ').trim();
+    var t = Core.stripBanners(String(m.bodyPreview || m.__text || ''), topic && topic.banners).replace(/\s+/g, ' ').trim();
     return t.length > SNIPPET ? t.slice(0, SNIPPET).replace(/\s+\S*$/, '') + '…' : t;
   }
 

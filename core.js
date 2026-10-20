@@ -241,7 +241,29 @@
     return 'none';
   }
 
+  // Warnbanner externer Mails ("ALERT: This message originated outside of ...") belegen sonst
+  // die ersten Zeichen jeder Vorschau. Muster: Klartext, Groß-/Kleinschreibung und Leerraum egal,
+  // "*" steht für beliebigen Text.
+  var DEFAULT_BANNERS = [
+    'ALERT: This message originated outside of the Fortinet network. BE CAUTIOUS before clicking any link or opening an attachment.'
+  ];
+
+  function stripBanners(text, patterns) {
+    var t = String(text || '');
+    (patterns || DEFAULT_BANNERS).forEach(function (p) {
+      var pat = String(p || '').trim();
+      if (!pat) return;
+      var src = pat.split('*').map(function (part) {
+        return part.trim().split(/\s+/).map(escapeRe).join('\\s+');
+      }).join('[\\s\\S]*?');
+      try { t = t.replace(new RegExp(src, 'i'), ' '); } catch (e) { /* ungültiges Muster ignorieren */ }
+    });
+    return t.replace(/[ \t\u00a0]+/g, ' ').replace(/^\s+/, '');
+  }
+
   var api = {
+    DEFAULT_BANNERS: DEFAULT_BANNERS,
+    stripBanners: stripBanners,
     DEFAULT_PREFIXES: DEFAULT_PREFIXES,
     cleanPrefixList: cleanPrefixList,
     buildPrefixRegexes: buildPrefixRegexes,
