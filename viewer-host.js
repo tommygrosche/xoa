@@ -19,7 +19,7 @@
   var topic = null;
   var cfg = null;
   var offset = 0;
-  var HOST_VERSION = '1.10.2';
+  var HOST_VERSION = '1.10.3';
   var openedBy = 'unknown';
 
   // ---------- Parameter, Speicher ----------
@@ -113,7 +113,8 @@
     if (!topic) return Promise.resolve({ error: 'No search was handed over. Open this window from Outlook via xOrg.' });
     if (!cfg) return Promise.resolve({ error: 'The XOB access is missing. Open this window again from Outlook.' });
     return Core.relatedQuery(callXob, {
-      conversationId: topic.conversationId || '',
+      // Sicherheitsnetz: nur Graph-Conversation-IDs (AAQk…) verwenden, andere (Android) weglassen
+      conversationId: /^AAQk/.test(topic.conversationId || '') ? topic.conversationId : '',
       normalized: topic.normalized,
       useSubject: topic.useSubject,
       mode: topic.mode,

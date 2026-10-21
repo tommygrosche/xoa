@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.10.2';
+  var VERSION = '1.10.3';
   var SETTINGS_KEY = 'xoaConfig';
   var Core = window.XoaCore;
 
@@ -135,6 +135,26 @@
       if (item && item.itemId && mb.convertToRestId) return mb.convertToRestId(item.itemId, Office.MailboxEnums.RestVersion.v2_0);
     } catch (e) { /* Mobile liefert ggf. bereits REST-IDs */ }
     return item ? item.itemId : null;
+  }
+
+  // Outlook auf Android/iOS liefert in item.conversationId keine Graph-Conversation-ID (z. B. "AAkALg…" statt "AAQk…").
+  // Dann die echte ID einmal über xob mail.info zur REST-ID der Mail holen und merken.
+  var convCache = {};
+  function needsConvLookup(convId) {
+    return !!convId && (isMobile() || !/^AAQk/.test(convId));
+  }
+  function resolveConversationId(item, convId) {
+    if (!needsConvLookup(convId)) return Promise.resolve(convId);
+    var rest = currentRestId(item);
+    if (!rest) return Promise.resolve('');
+    if (convCache[rest] !== undefined) return Promise.resolve(convCache[rest]);
+    return callXob('mail.info', { ids: [rest] }).then(function (json) {
+      var items = (json && json.data && json.data.items) || [];
+      var hit = items.filter(function (x) { return x && x.conversationId; })[0];
+      var id = hit ? hit.conversationId : '';
+      convCache[rest] = id;
+      return id;
+    }, function () { return ''; }); // ohne ID weiter: Betreff und Suchbegriffe funktionieren trotzdem
   }
 
   // Ausgewählte Mail als Graph-ähnliches Objekt (Ersatz, falls xob sie nicht mitliefert)
@@ -418,7 +438,8 @@
 
     lastTopic = {
       v: 1,
-      conversationId: conversationId,
+      // Android-ID erst nach der Abfrage übernehmen (Fenster könnte vorher geöffnet werden)
+      conversationId: needsConvLookup(conversationId) ? '' : conversationId,
       normalized: normalized,
       raw: raw,
       useSubject: useSubject,
@@ -435,7 +456,11 @@
     setState('Suche läuft…');
     if (canUseWindow()) $('list').innerHTML = ''; else showSkeleton();
 
-    Core.relatedQuery(callXob, {
+    resolveConversationId(item, conversationId).then(function (convId) {
+      if (token !== runToken) return null;
+      conversationId = convId;
+      lastTopic.conversationId = convId;
+      return Core.relatedQuery(callXob, {
       conversationId: conversationId,
       normalized: normalized,
       useSubject: useSubject,
@@ -443,7 +468,9 @@
       terms: terms,
       fullText: fullText,
       top: lastTopic.top
+      });
     }).then(function (json) {
+      if (!json) return;
       if (token !== runToken) return;
       var data = json.data || {};
       var result = Core.mergeResults(data.conversation || [], data.subject || [], {
