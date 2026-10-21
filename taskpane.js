@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.10.1';
+  var VERSION = '1.10.2';
   var SETTINGS_KEY = 'xoaConfig';
   var Core = window.XoaCore;
 
@@ -84,30 +84,42 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
-    }, 60000).then(function (r) {
+    }, 125000).then(function (r) {
       return r.text().then(function (text) {
         var json = null;
         try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
         var ms = Date.now() - started;
         if (r.status === 401) throw new XobError('UNAUTHORIZED', 'Der xob-Schlüssel stimmt nicht. Prüf ihn in den Einstellungen.', false);
         if (!r.ok || !json || json.status === 'error') {
+          if (r.status === 504 || (json && json.error && json.error.code === 'UPSTREAM_TIMEOUT')) {
+            throw new XobError('TIMEOUT', 'xob hat nicht rechtzeitig geantwortet (HTTP 504). Bitte in einer Minute erneut versuchen.', false);
+          }
+          if (r.status === 429 || r.status === 503) {
+            throw new XobError('BUSY', 'xob ist gerade ausgelastet (HTTP ' + r.status + '). Bitte gleich erneut versuchen.', true);
+          }
           var msg = (json && json.error && json.error.message) || ('xob antwortet mit HTTP ' + r.status + '.');
-          throw new XobError((json && json.error && json.error.code) || ('HTTP_' + r.status), msg, r.status === 429 || r.status === 503 || r.status === 504);
+          throw new XobError((json && json.error && json.error.code) || ('HTTP_' + r.status), msg, false);
         }
         json._ms = ms;
         return json;
       });
     }, function (e) {
       var aborted = e && e.name === 'AbortError';
+      // Abbruch nach Zeitlimit: Flow läuft evtl. noch -> nicht wiederholen. Netzfehler: Anfrage kam nie an -> einmal wiederholen.
       throw new XobError(aborted ? 'TIMEOUT' : 'NETWORK',
-        aborted ? 'xob hat nicht rechtzeitig geantwortet.' : 'xob ist nicht erreichbar. Netzwerk oder URL prüfen.', true);
+        aborted ? 'xob hat nicht rechtzeitig geantwortet.' : 'xob ist nicht erreichbar. Netzwerk oder URL prüfen.', !aborted);
     });
   }
 
   function callXob(service, payload) {
     return callXobOnce(service, payload).catch(function (e) {
       if (!e.retryable) throw e;
-      return new Promise(function (res) { setTimeout(res, 800); }).then(function () { return callXobOnce(service, payload); });
+      return new Promise(function (res) { setTimeout(res, 3000); }).then(function () { return callXobOnce(service, payload); })
+        .catch(function (e2) {
+          // Nach dem zweiten Versuch keine weitere Ersatzsuche auslösen (Core.relatedQuery fächert sonst auf)
+          if (e2 && e2.code === 'BUSY') e2.code = 'TIMEOUT';
+          throw e2;
+        });
     });
   }
 
@@ -640,7 +652,13 @@
     loadConfig();
     bindUi();
     try {
-      Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, function () { closeSettings(); $('terms').value = ''; refresh(); });
+      var itemTimer = null;
+      Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, function () {
+        closeSettings();
+        $('terms').value = '';
+        clearTimeout(itemTimer);
+        itemTimer = setTimeout(refresh, 700);
+      });
     } catch (e) { /* ohne Pinning */ }
     refresh();
   });

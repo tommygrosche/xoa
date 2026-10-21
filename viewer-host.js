@@ -19,7 +19,7 @@
   var topic = null;
   var cfg = null;
   var offset = 0;
-  var HOST_VERSION = '1.10.1';
+  var HOST_VERSION = '1.10.2';
   var openedBy = 'unknown';
 
   // ---------- Parameter, Speicher ----------
@@ -96,6 +96,8 @@
           var json = null;
           try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
           if (r.status === 401) throw { code: 'UNAUTHORIZED', message: 'The XOB key is wrong. Check it in the settings of the panel.' };
+          if (r.status === 504 || (json && json.error && json.error.code === 'UPSTREAM_TIMEOUT')) throw { code: 'TIMEOUT', message: 'XOB did not answer in time (HTTP 504). Try again in a minute.' };
+          if (r.status === 429 || r.status === 503) throw { code: 'TIMEOUT', message: 'XOB is busy right now (HTTP ' + r.status + '). Try again shortly.' };
           if (!r.ok || !json || json.status === 'error') {
             throw { code: (json && json.error && json.error.code) || ('HTTP_' + r.status), message: (json && json.error && json.error.message) || ('XOB answered with HTTP ' + r.status + '.') };
           }
