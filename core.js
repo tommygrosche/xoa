@@ -241,6 +241,63 @@
     return 'none';
   }
 
+  // ---------- Move Task Flag (Fenster "Related emails") ----------
+  function localDate(t) { return t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate()); }
+
+  /** Heutiges Datum des Rechners als YYYY-MM-DD. */
+  function todayLocal(now) { return localDate(now || new Date()); }
+
+  /**
+   * Fälligkeit eines Outlook-Flags (Graph followupFlag.dueDateTime) als lokales Datum YYYY-MM-DD, '' = keine.
+   * Outlook speichert Mitternacht der eigenen Zeitzone in UTC (z. B. 2026-11-05T23:00:00 UTC = 06.11. in Berlin).
+   */
+  function flagDueDate(m) {
+    var d = m && m.flag && m.flag.dueDateTime;
+    if (!d || !d.dateTime) return '';
+    var s = String(d.dateTime);
+    if (/^(UTC|GMT|Etc\/UTC|Coordinated Universal Time)$/i.test(String(d.timeZone || 'UTC'))) {
+      var t = new Date(s.replace(/(\.\d{3})\d*$/, '$1').replace(/Z?$/, 'Z'));
+      if (!isNaN(t.getTime())) return localDate(t);
+    }
+    return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : '';
+  }
+
+  /** Neue Fälligkeit beim Umhängen: liegt die alte in der Vergangenheit, gilt heute; sonst unverändert ('' bleibt ''). */
+  function moveFlagDue(oldDue, today) {
+    if (!oldDue) return '';
+    return oldDue < today ? today : oldDue;
+  }
+
+  function utcMidnight(day) {
+    var p = String(day).split('-');
+    var t = new Date(+p[0], +p[1] - 1, +p[2]);
+    return { dateTime: t.toISOString().slice(0, 19), timeZone: 'UTC' };
+  }
+
+  /** Graph-Flag für die neue Mail: gesetzt, mit Fälligkeit (Start = heute bzw. Fälligkeit), ohne Fälligkeit nur gesetzt. */
+  function flagPatch(due, today) {
+    var f = { flagStatus: 'flagged' };
+    if (due) {
+      f.startDateTime = utcMidnight(due < today ? due : today);
+      f.dueDateTime = utcMidnight(due);
+    }
+    return f;
+  }
+
+  /**
+   * Auswahl prüfen: genau 2 Mails, genau eine davon mit Flag (Status egal: gesetzt oder erledigt).
+   * Rückgabe { from: Mail mit Flag, to: andere Mail } oder null.
+   */
+  function moveFlagPlan(selected) {
+    if (!selected || selected.length !== 2 || !selected[0] || !selected[1]) return null;
+    var withFlag = selected.filter(function (m) { return flagState(m) !== 'none'; });
+    if (withFlag.length !== 1) return null;
+    var from = withFlag[0];
+    var to = selected[0] === from ? selected[1] : selected[0];
+    if (!from.id || !to.id || from.id === to.id) return null;
+    return { from: from, to: to };
+  }
+
   // Warnbanner externer Mails ("ALERT: This message originated outside of ...") belegen sonst
   // die ersten Zeichen jeder Vorschau. Muster: Klartext, Groß-/Kleinschreibung und Leerraum egal,
   // "*" steht für beliebigen Text.
@@ -278,7 +335,12 @@
     formatTimestamp: formatTimestamp,
     personName: personName,
     recipientsLabel: recipientsLabel,
-    flagState: flagState
+    flagState: flagState,
+    todayLocal: todayLocal,
+    flagDueDate: flagDueDate,
+    moveFlagDue: moveFlagDue,
+    flagPatch: flagPatch,
+    moveFlagPlan: moveFlagPlan
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

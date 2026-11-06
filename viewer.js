@@ -5,8 +5,13 @@
  *   topic()            -> Promise<{ raw, normalized, terms, label }>
  *   search()           -> Promise<{ items, total, ms } | { error }>
  *   openMail(link, id) -> Promise<{ ok, error? }>
- *   openOn             optional: 'dblclick' = Mail erst nach Doppelklick öffnen (Standard: ein Klick)
+ *   openOn             veraltet (ab xOrg 2.20.0 / XOA 1.11.0 öffnet immer der Doppelklick, ein Klick wählt aus)
+ *   moveFlag(plan)     optional: "Move Task Flag" - plan = { from: Mail mit Flag, to: andere Mail }, je
+ *                      { id, webLink, subject, fromName, fromAddress, received, preview, flag, current }
+ *                      -> Promise<{ ok, toFlag?, fromCleared?, relinked?, message?, warning? } | { error, toFlag?, fromCleared? }>
  *   onRefresh(cb)      Aufruf, wenn das Fenster neu suchen soll
+ *   link(mail)         optional (nur xOrg Desktop): das Task dieses Fensters mit der Mail verknüpfen
+ *                      -> Promise<{ ok, dbWritten, warning? } | { error }>; topic().canLink muss true sein
  */
 (function () {
   'use strict';
@@ -30,7 +35,11 @@
   var view = { kind: 'loading' };
   var sortKey = 'received';
   var sortDir = -1;
-  var selectedId = null;
+  var picked = [];          // ausgewählte Mails (IDs, höchstens 2, älteste Auswahl zuerst)
+  var MAX_PICK = 2;
+  var DOUBLE_MS = 450;      // zweiter Klick/Tipp auf dieselbe Mail innerhalb dieser Zeit = Doppelklick
+  var lastTap = { id: null, t: 0, before: null };
+  var moving = false;
   var colFilter = { from: '', to: '', subject: '', received: '', hasAttachments: false, flag: false };
   var widths = COLS.map(function (c) { return c.w; });
 
@@ -105,7 +114,10 @@
       hasAttachments: !!m.hasAttachments,
       flag: Core.flagState(m),
       current: !!m.__current,
-      sources: m.__sources || []
+      sources: m.__sources || [],
+      fromName: (m.from && m.from.emailAddress && m.from.emailAddress.name) || '',
+      fromAddress: (m.from && m.from.emailAddress && m.from.emailAddress.address) || '',
+      preview: String(m.bodyPreview || '')
     };
   }
 
@@ -144,6 +156,27 @@
     window.related.openMail(it.webLink, it.id).then(function (r) { if (r && !r.ok) setState(r.error || 'Outlook could not be opened.', true); });
   }
 
+  // "Link ToDo to selected Email": nur xOrg Desktop, nur wenn das Fenster zu einem Task gehört
+  function canLink() { return !!(window.related.link && topic && topic.canLink); }
+
+  function linkItem(it) {
+    var who = it.fromName || it.fromAddress || '(unknown)';
+    var ok = window.confirm('Link the open To Do to this email?\n\n' + (it.subject || '(no subject)') + '\n' + who + ' · ' + it.receivedText +
+      '\n\nThe current link of the To Do is replaced.');
+    if (!ok) return;
+    setState('Linking…');
+    window.related.link({
+      id: it.id, webLink: it.webLink, subject: it.subject, fromName: it.fromName, fromAddress: it.fromAddress,
+      received: it.received, preview: it.preview
+    }).then(function (r) {
+      if (!r || r.error) { render(); setState((r && r.error) || 'The link could not be set.', true); return; }
+      (view.items || []).forEach(function (m) { m.__current = (m.id === it.id); });
+      render();
+      var note = r.warning || (r.dbWritten ? 'To Do linked to this email.' : 'To Do linked to this email (in xOrg).');
+      $('meta').textContent = note;
+    }).catch(function (e) { render(); setState((e && e.message) || 'The link could not be set.', true); });
+  }
+
   function cell(tag, cls, text, title) {
     var c = document.createElement(tag);
     c.className = cls;
@@ -152,11 +185,77 @@
     return c;
   }
 
-  function select(group, it) {
-    var prev = document.querySelector('tbody.sel');
-    if (prev && prev !== group) prev.classList.remove('sel');
-    group.classList.add('sel');
-    selectedId = it.id;
+  // ---------- Auswahl (höchstens 2 Mails) und "Move Task Flag" ----------
+  function rawById(id) {
+    var list = view.items || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+
+  function showPicks() {
+    Array.prototype.forEach.call(document.querySelectorAll('tbody.mail'), function (g) {
+      g.classList.toggle('sel', picked.indexOf(g.getAttribute('data-id')) >= 0);
+    });
+    updateMoveButton();
+  }
+
+  function togglePick(id) {
+    var i = picked.indexOf(id);
+    if (i >= 0) picked.splice(i, 1);
+    else {
+      picked.push(id);
+      while (picked.length > MAX_PICK) picked.shift();   // dritte Mail ersetzt die zuerst gewählte
+    }
+    showPicks();
+  }
+
+  function canMove() { return typeof window.related.moveFlag === 'function'; }
+
+  function currentPlan() {
+    if (picked.length !== 2) return null;
+    return Core.moveFlagPlan(picked.map(rawById));
+  }
+
+  function updateMoveButton() {
+    var b = $('btnMoveFlag');
+    if (!b) return;
+    b.hidden = !canMove();
+    var plan = currentPlan();
+    b.disabled = moving || !plan;
+    b.title = moving ? 'Moving the flag…'
+      : plan ? 'Flag the selected email without flag, remove the flag of the other one' +
+        (canLink() ? ' and link the To Do to the new email' : '') + '. A due date in the past becomes today.'
+      : 'Select exactly two emails, exactly one of them with a flag.';
+  }
+
+  function wire(m) {
+    var it = fields(m);
+    return {
+      id: it.id, webLink: it.webLink, subject: it.subject, fromName: it.fromName, fromAddress: it.fromAddress,
+      received: it.received, preview: it.preview, flag: m.flag || null, current: it.current
+    };
+  }
+
+  function moveFlag() {
+    var plan = currentPlan();
+    if (!plan || moving || !canMove()) return;   // ohne gültige Auswahl: nichts tun
+    moving = true;
+    updateMoveButton();
+    setState('Moving the flag…');
+    var from = plan.from, to = plan.to;
+    function finish(r) {
+      moving = false;
+      if (r && r.toFlag) to.flag = r.toFlag;
+      if (r && r.fromCleared) from.flag = { flagStatus: 'notFlagged' };
+      if (r && r.relinked) (view.items || []).forEach(function (m) { m.__current = (m.id === to.id); });
+      if (r && !r.error) picked = [];
+      render();
+      if (!r || r.error) setState((r && r.error) || 'The flag could not be moved.', true);
+      else $('meta').textContent = r.warning || r.message || 'Flag moved.';
+    }
+    window.related.moveFlag({ from: wire(from), to: wire(to) }).then(finish, function (e) {
+      finish({ error: (e && e.message) || 'The flag could not be moved.' });
+    });
   }
 
   // ---------- Darstellung ----------
@@ -174,12 +273,16 @@
     $('count').textContent = '';
     $('meta').textContent = '';
 
+    updateMoveButton();
     if (view.kind === 'loading') { setState('Searching…'); return; }
     if (view.kind === 'message') { setState(view.text || ''); return; }
     if (view.kind === 'error') { setState(view.text || 'Unknown error.', true); return; }
 
     var items = visibleItems();
     var total = (view.items || []).length;
+    var shown = items.map(function (x) { return x.id; });
+    picked = picked.filter(function (id) { return shown.indexOf(id) >= 0; });
+    updateMoveButton();
     $('count').textContent = items.length === total ? (view.count || String(total)) : items.length + ' of ' + total;
     $('meta').textContent = 'XOB · ' + view.ms + ' ms' + (window.related.info ? ' · ' + window.related.info() : '');
 
@@ -191,7 +294,8 @@
 
     items.forEach(function (it) {
       var group = document.createElement('tbody');
-      group.className = 'mail' + (it.current ? ' current' : '');
+      group.className = 'mail' + (it.current ? ' current' : '') + (picked.indexOf(it.id) >= 0 ? ' sel' : '');
+      group.setAttribute('data-id', it.id);
       group.tabIndex = 0;
       group.title = 'Found by: ' + it.sources.map(function (k) { return SRC[k] || k; }).join(', ');
 
@@ -226,22 +330,44 @@
       sn.className = 'snip';
       sn.textContent = it.text;
       tc.appendChild(sn);
+      if (canLink() && !it.current) {
+        tc.classList.add('has-link');
+        var lb = document.createElement('button');
+        lb.type = 'button';
+        lb.className = 'link-todo';
+        lb.textContent = 'Link ToDo to this email';
+        lb.title = 'Link the open To Do to this email (replaces its current email link)';
+        lb.addEventListener('click', function (e) { e.stopPropagation(); linkItem(it); });
+        lb.addEventListener('keydown', function (e) { e.stopPropagation(); });
+        tc.appendChild(lb);
+      }
       textRow.appendChild(tc);
       group.appendChild(textRow);
 
-      // Standard (xOrg Desktop): ein Klick öffnet. Setzt die App window.related.openOn = 'dblclick' (XOA), öffnet erst der Doppelklick.
-      var dbl = window.related.openOn === 'dblclick';
-      group.addEventListener('click', function () { select(group, it); if (!dbl) openItem(it); });
-      if (dbl) group.addEventListener('dblclick', function () { select(group, it); openItem(it); });
+      // Ein Klick (Tipp) wählt aus bzw. ab, höchstens 2 Mails. Doppelklick (Doppeltipp) öffnet die Mail.
+      // Eigene Erkennung statt 'dblclick', damit es auch auf Android (Touch) gleich funktioniert.
+      group.addEventListener('click', function () {
+        var now = Date.now();
+        if (lastTap.id === it.id && now - lastTap.t < DOUBLE_MS) {
+          picked = lastTap.before;               // der erste Klick des Doppelklicks ändert die Auswahl nicht
+          lastTap = { id: null, t: 0, before: null };
+          showPicks();
+          openItem(it);
+          return;
+        }
+        lastTap = { id: it.id, t: now, before: picked.slice() };
+        togglePick(it.id);
+      });
       group.addEventListener('keydown', function (ev) {
+        if (ev.target !== group) return;
         if (ev.key === 'Enter') { ev.preventDefault(); openItem(it); }
+        else if (ev.key === ' ') { ev.preventDefault(); togglePick(it.id); }
         else if (ev.key === 'ArrowDown' && group.nextSibling) { ev.preventDefault(); group.nextSibling.focus(); }
         else if (ev.key === 'ArrowUp' && group.previousSibling && group.previousSibling.tagName === 'TBODY') { ev.preventDefault(); group.previousSibling.focus(); }
       });
-      group.addEventListener('focus', function () { select(group, it); });
-      if (it.id === selectedId) group.classList.add('sel');
       $('grid').appendChild(group);
     });
+    updateMoveButton();
   }
 
   // ---------- Kopf: Sortieren, Breite ziehen, Filter ----------
@@ -347,6 +473,11 @@
     window.addEventListener('resize', scale);
     $('filter').addEventListener('input', render);
     $('btnRefresh').addEventListener('click', search);
+    if ($('btnMoveFlag')) $('btnMoveFlag').addEventListener('click', moveFlag);
+    updateMoveButton();
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && picked.length && !/^(INPUT|TEXTAREA)$/.test((ev.target && ev.target.tagName) || '')) { picked = []; showPicks(); }
+    });
     window.related.onRefresh(search);
     $('opened').textContent = 'opened ' + Core.formatTimestamp(new Date().toISOString());
     window.related.topic().then(function (t) {

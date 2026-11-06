@@ -19,7 +19,7 @@
   var topic = null;
   var cfg = null;
   var offset = 0;
-  var HOST_VERSION = '1.10.3';
+  var HOST_VERSION = '1.11.0';
   var openedBy = 'unknown';
 
   // ---------- Parameter, Speicher ----------
@@ -144,13 +144,37 @@
     });
   }
 
+  // ---------- "Move Task Flag": Flag auf die andere Mail umsetzen (über xob mail.flag) ----------
+  // Reihenfolge: erst die neue Mail flaggen, dann das alte Flag entfernen. So geht bei einem Fehler kein Flag verloren.
+  // XOA kennt kein To Do: Die Aufgabe in To Do entsteht aus dem Flag selbst (Fälligkeit = Fälligkeit des Flags).
+  function moveFlag(plan) {
+    if (!cfg) return Promise.resolve({ error: 'The XOB access is missing. Open this window again from Outlook.' });
+    var from = plan && plan.from, to = plan && plan.to;
+    if (!from || !to || !from.id || !to.id) return Promise.resolve({ error: 'Select exactly two emails, exactly one of them with a flag.' });
+    var today = Core.todayLocal();
+    var due = Core.moveFlagDue(Core.flagDueDate(from), today);
+    var dueText = due ? ' Due date: ' + Core.formatTimestamp(due + 'T12:00:00').slice(0, 10) + '.' : '';
+    return callXob('mail.flag', { id: to.id, flag: Core.flagPatch(due, today) }).then(function (j1) {
+      var toFlag = (j1.data && j1.data.flag) || { flagStatus: 'flagged' };
+      return callXob('mail.flag', { id: from.id, flag: { flagStatus: 'notFlagged' } }).then(function () {
+        return { ok: true, toFlag: toFlag, fromCleared: true, message: 'Flag moved to the selected email.' + dueText };
+      }, function (e) {
+        return { error: 'The new email is flagged, but the flag of the old email could not be removed (' + ((e && e.message) || 'unknown error') + '). Remove it in Outlook.', toFlag: toFlag };
+      });
+    }, function (e) {
+      return { error: 'The flag was not moved: ' + ((e && e.message) || 'unknown error') };
+    });
+  }
+
   window.related = {
     topic: function () {
       return Promise.resolve(topic ? { raw: topic.raw, normalized: topic.normalized, terms: topic.terms || [], fullText: !!topic.fullText, banners: Core.DEFAULT_BANNERS, label: 'Related emails' } : null);
     },
     search: search,
     // Mail nur nach Doppelklick öffnen (Outlook lässt kein eigenes Fenster zu: Die Mail geht im Browser auf).
+    // Ab 1.11.0 gilt das für alle Clients fest in viewer.js (ein Klick wählt aus).
     openOn: 'dblclick',
+    moveFlag: moveFlag,
     openMail: function (link) {
       if (!link) return Promise.resolve({ ok: false, error: 'No link available for this email.' });
       window.open(link, '_blank', 'noopener');

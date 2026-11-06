@@ -54,6 +54,17 @@ body {
 .icon-btn:hover { background: var(--bg-sel); color: var(--brand); border-color: var(--brand); }
 .icon-btn svg { width: 1.3em; height: 1.3em; }
 
+/* "Move Task Flag": nur aktiv bei genau 2 gewählten Mails, davon genau eine mit Flag */
+.text-btn {
+  height: 2.3em; padding: 0 .9em; font: inherit; font-weight: 600; white-space: nowrap; flex: 0 0 auto; cursor: pointer;
+  border: 1px solid var(--brand); border-radius: var(--radius); background: var(--brand); color: #fff;
+}
+.text-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.text-btn:disabled { cursor: default; background: var(--bg); color: var(--fg-3); border-color: var(--line-strong); }
+.text-btn[hidden] { display: none; }
+/* Touch: kein Zoom-Verzug beim Doppeltipp */
+tbody.mail { touch-action: manipulation; }
+
 /* ---------- Tabelle ---------- */
 .table-wrap { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; min-height: 0; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
@@ -118,6 +129,16 @@ tbody.mail.current tr.head td:first-child { box-shadow: inset .25em 0 0 var(--br
   display: inline-block; margin-right: .5em; padding: 0 .4em; border: 1px solid var(--brand); border-radius: .8em;
   font-size: .8em; font-weight: 600; color: var(--brand); vertical-align: .1em;
 }
+
+/* "Link ToDo to this email" (nur xOrg Desktop): erscheint beim Überfahren/Fokussieren rechts in der Textzeile */
+tbody.mail tr.text td.has-link { position: relative; }
+tbody.mail tr.text td.has-link .snip { padding-right: 13em; min-height: 1.8em; }
+.link-todo {
+  position: absolute; right: .6em; top: 50%; transform: translateY(-50%); opacity: 0; font: inherit; font-size: .85em;
+  padding: .15em .6em; border: 1px solid var(--brand); border-radius: .4em; background: var(--bg); color: var(--brand); cursor: pointer;
+}
+tbody.mail:hover .link-todo, tbody.mail:focus-within .link-todo, tbody.mail.sel .link-todo { opacity: 1; }
+.link-todo:hover { background: var(--brand); color: #fff; }
 
 .state { padding: 1.2em 1em; color: var(--fg-2); }
 .state.error { color: var(--danger); }
