@@ -262,10 +262,10 @@
     return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : '';
   }
 
-  /** Neue Fälligkeit beim Umhängen: liegt die alte in der Vergangenheit, gilt heute; sonst unverändert ('' bleibt ''). */
+  /** Neue Fälligkeit beim Umhängen: keine oder in der Vergangenheit -> heute, in der Zukunft -> unverändert. */
   function moveFlagDue(oldDue, today) {
-    if (!oldDue) return '';
-    return oldDue < today ? today : oldDue;
+    if (!oldDue || oldDue < today) return today;
+    return oldDue;
   }
 
   function utcMidnight(day) {
